@@ -1,0 +1,13 @@
+# Site settings
+title: JiuHu's home ground
+email: aheweys@gmail.com
+description: >-
+  A new home ground for experimental works.
+baseurl: ""
+url: ""
+github_username:  jiuhu
+
+# Build settings
+theme: minima
+plugins:
+  - jekyll-feed
