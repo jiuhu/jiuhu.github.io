@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TeapotWar — Advance Rendering ACW</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; }
+    canvas { display: block; }
+    #back {
+      position: fixed; top: 12px; left: 14px;
+      color: #adf; font: 11px/1 monospace;
+      text-decoration: none; opacity: 0.6;
+      transition: opacity .2s; z-index: 10;
+    }
+    #back:hover { opacity: 1; }
+    #info {
+      position: fixed; top: 30px; left: 10px; color: #eee;
+      font: 12px/1.5 monospace; pointer-events: none;
+      text-shadow: 1px 1px 2px #000;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+<a id="back" href="../../">← back</a>
+<div id="info">TeapotWar · Orbit: drag · Zoom: scroll</div>
+<script type="module">
+import * as THREE from 'three';
+import { TDSLoader }     from 'three/addons/loaders/TDSLoader.js';
+import { OBJLoader }     from 'three/addons/loaders/OBJLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ─── Renderer ────────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = false;
+document.body.appendChild(renderer.domElement);
+
+// ─── Scene & Camera (D3D → WebGL: negate Z) ──────────────────────────────────
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 1, 9500);
+camera.position.set(39, 375, 3730);   // original (39,375,-3730) → negate Z
+camera.lookAt(0, 0, 0);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ─── Global uniforms ─────────────────────────────────────────────────────────
+const LIGHT_POS = new THREE.Vector3(-2000, 1300, -2000); // (−2000,1300,2000) → neg Z
+const timeRef   = { value: 0.0 };
+
+// ─── Loaders ─────────────────────────────────────────────────────────────────
+const texLoader = new THREE.TextureLoader();
+const tdsLoader = new TDSLoader();
+const objLoader = new OBJLoader();
+
+function tex(name) {
+  const t = texLoader.load(`textures/${name}`);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+// ─── Skybox ──────────────────────────────────────────────────────────────────
+{
+  const cubeLoader = new THREE.CubeTextureLoader();
+  const sky = cubeLoader.setPath('textures/').load([
+    'sky_px.png','sky_nx.png',
+    'sky_py.png','sky_ny.png',
+    'sky_pz.png','sky_nz.png',
+  ]);
+  scene.background = sky;
+}
+
+// ─── GLSL helpers (shared across all teapot vertex shaders) ──────────────────
+const ROTATE_HELPERS = /* glsl */`
+  vec3 rx(vec3 p, float a) {
+    float c = cos(a), s = sin(a);
+    return vec3(p.x, c*p.y - s*p.z, s*p.y + c*p.z);
+  }
+  vec3 ry(vec3 p, float a) {
+    float c = cos(a), s = sin(a);
+    return vec3(c*p.x + s*p.z, p.y, -s*p.x + c*p.z);
+  }
+  vec3 rz(vec3 p, float a) {
+    float c = cos(a), s = sin(a);
+    return vec3(c*p.x - s*p.y, s*p.x + c*p.y, p.z);
+  }
+`;
+
+// ─── Shared Phong fragment shader ─────────────────────────────────────────────
+const PHONG_FS = /* glsl */`
+  precision highp float;
+  uniform sampler2D uTex;
+  uniform float uSpcPow;
+  varying vec2 vUv;
+  varying vec3 vN, vL, vV;
+
+  void main() {
+    vec3 N = normalize(vN);
+    vec3 L = normalize(vL);
+    vec3 V = normalize(vV);
+    float NdL = max(0.0, dot(N, L));
+    vec3 R = reflect(-L, N);
+    float VdR = max(0.0, dot(V, R));
+    vec4 tc = texture2D(uTex, vUv);
+    // ambient=1, diffuse=1, specular=0 (matches original black specular)
+    gl_FragColor = tc * (1.0 + NdL);
+  }
+`;
+
+// ─── Bump-mapped Phong fragment shader (for wall teapots & terrain) ───────────
+const BUMP_PHONG_FS = /* glsl */`
+  precision highp float;
+  uniform sampler2D uTex;
+  uniform sampler2D uBump;
+  uniform float uSpcPow;
+  varying vec2 vUv;
+  varying vec3 vN, vL, vV;
+  varying vec3 vWorldPos;
+
+  void main() {
+    // Derivative-based TBN
+    vec3 N = normalize(vN);
+    vec3 dp1 = dFdx(vWorldPos);
+    vec3 dp2 = dFdy(vWorldPos);
+    vec2 du1 = dFdx(vUv);
+    vec2 du2 = dFdy(vUv);
+    vec3 T = normalize(dp1 * du2.y - dp2 * du1.y);
+    vec3 B = normalize(cross(N, T));
+    mat3 TBN = mat3(T, B, N);
+
+    vec3 bumpN = TBN * (texture2D(uBump, vUv).xyz * 2.0 - 1.0);
+    bumpN = normalize(bumpN);
+
+    vec3 L = normalize(vL);
+    vec3 V = normalize(vV);
+    float NdL = max(0.0, dot(bumpN, L));
+    vec3 R = reflect(-L, bumpN);
+    float VdR = max(0.0, dot(V, R));
+    vec4 tc = texture2D(uTex, vUv);
+    gl_FragColor = tc * (1.0 + NdL);
+  }
+`;
+
+// ─── Helper: build a teapot ShaderMaterial ────────────────────────────────────
+// pos:  world-space position with Z already negated
+// deformGLSL: GLSL body of vec3 deform(vec3 pos), must return pos
+function mkTeapot(geo, pos, size, texName, deformGLSL, opts = {}) {
+  const t = tex(texName);
+
+  const vs = /* glsl */`
+    precision highp float;
+    uniform float uSize;
+    uniform vec3 uOffset;
+    uniform vec3 uLight;
+    uniform float uTime;
+    uniform float uFreq;
+    ${ROTATE_HELPERS}
+
+    vec3 deform(vec3 pos) {
+      ${deformGLSL}
+    }
+
+    varying vec2 vUv;
+    varying vec3 vN, vL, vV;
+    varying vec3 vWorldPos;
+
+    void main() {
+      vec3 p = deform(position);
+      p = p * uSize + uOffset;
+      gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+      vUv = uv;
+      vN = normalize(normal);
+      vL = normalize(uLight - p);
+      vV = normalize(cameraPosition - p);
+      vWorldPos = p;
+    }
+  `;
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: Object.assign({
+      uSize:   { value: size },
+      uOffset: { value: new THREE.Vector3(...pos) },
+      uLight:  { value: LIGHT_POS },
+      uTime:   timeRef,
+      uFreq:   { value: opts.freq ?? 1.0 },
+      uTex:    { value: t },
+      uBump:   { value: opts.bumpTex ?? null },
+      uSpcPow: { value: 2.0 },
+    }, opts.extraUniforms ?? {}),
+    vertexShader:   vs,
+    fragmentShader: opts.bumpTex ? BUMP_PHONG_FS : PHONG_FS,
+    side: opts.side ?? THREE.FrontSide,
+  });
+
+  const mesh = new THREE.Mesh(geo, mat);
+  scene.add(mesh);
+  return mesh;
+}
+
+// ─── Deformation functions ────────────────────────────────────────────────────
+
+// Default: no deformation (just scale+offset)
+const DEFORM_NONE = `return pos;`;
+
+// Spherify (Sun Teapot, Glass Teapot): project to sphere
+const DEFORM_SPHERE = `
+  if (abs(pos.x) > 50.0) {
+    pos = smoothstep(vec3(0.0), vec3(10.0), pos);
+  } else {
+    float r = length(pos);
+    if (r > 0.001) pos = pos / r * 30.0;
+  }
+  return pos;
+`;
+
+// Main Building Teapot
+const DEFORM_MAINBUILDING = `
+  float radius = length(pos.xz);
+  float r = length(pos);
+  if (pos.y > 21.0 && radius < 33.8) {
+    if (r > 0.001) { pos /= r; pos *= 30.0; }
+  } else if (abs(pos.x) > 50.0) {
+    pos.x = 0.0;
+  } else if (pos.y < -35.0 && radius > 35.0) {
+    if (abs(pos.z) > 8.0 && abs(pos.x) > 8.0) pos.y -= 30.0;
+  } else {
+    float rr = length(pos.xz);
+    if (rr > 0.001) pos.xz = pos.xz / rr * 20.0;
+  }
+  return pos;
+`;
+
+// Tower Teapot: sphere body + long downward stem
+const DEFORM_TOWER = `
+  float radius = length(pos.xz);
+  if (pos.y < 0.0 && radius < 5.0) {
+    pos.y -= 50.0;
+  } else if (pos.y > 21.0 && radius < 33.8) {
+    // keep cap
+  } else if (abs(pos.x) > 50.0) {
+    pos = smoothstep(vec3(0.0), vec3(10.0), pos);
+  } else {
+    float l = length(pos);
+    if (l > 0.001) pos = pos / l * (uSize * 2.0);
+  }
+  return pos;
+`;
+
+// Garage Teapot: flat disc/base platform
+const DEFORM_GARAGE = `
+  float radius = length(pos.xz);
+  if (pos.y > 20.0 && radius < 33.0) {
+    if (radius < 30.0) {
+      pos.y = smoothstep(0.0, 40.0, pos.y);
+      pos.y -= 39.0;
+    }
+  } else {
+    pos.xz = vec2(0.0);
+    pos.y = -39.0;
+  }
+  return pos;
+`;
+
+// Wall Teapots: stretched wall/building shape
+const DEFORM_WALL = `
+  float radius = length(pos.xz);
+  if (abs(pos.x) > 50.0) {
+    pos = smoothstep(vec3(0.0), vec3(10.0), pos);
+  } else if (pos.y > 21.0 && radius < 33.8) {
+    pos = vec3(0.0);   // remove cap
+  } else {
+    pos.z = smoothstep(0.0, 10.0, pos.z);
+    if (pos.y > 20.0 && (abs(pos.x) > 3.0)) {
+      if (mod(floor(pos.x / 5.0), 2.0) == 0.0) pos.y += 5.0;
+    }
+    pos.x *= 2.0;
+    pos.z *= 5.0;
+  }
+  return pos;
+`;
+
+// Turret Teapot: gun barrel shape
+const DEFORM_TURRET = `
+  float radius = length(pos.xz);
+  if (pos.x > 50.0) {
+    if (pos.x < 70.0) {
+      pos.yz = pos.yz / radius;
+      if (pos.z > 0.0) pos.z += 5.0; else pos.z -= 5.0;
+      pos.y *= 30.0;
+      pos.x *= 1.2;
+    }
+  } else if (pos.y < -37.0) {
+    pos.xz = pos.xz / max(radius, 0.001) * 20.0;
+    pos.y = -37.0;
+  } else {
+    pos = normalize(pos) * 30.0;
+  }
+  return pos;
+`;
+
+// Robot Teapot (walking/bombing): humanoid shape
+const DEFORM_ROBOT = `
+  if (pos.x < -50.0) {
+    pos.x = 0.0;
+  } else if (pos.x > 52.0) {
+    pos.x = 0.0;
+  } else if (pos.y > 30.0) {
+    pos.y += 15.0; pos.x *= 3.0; pos.z *= 1.5;
+  } else if (pos.x < 20.0 && pos.x > -20.0) {
+    pos.y *= 1.2;
+    if (pos.y < -35.0 && (abs(pos.z) > 5.0)) {
+      pos.y -= 20.0; pos.x += 5.0;
+    } else if (pos.y < 10.0 && pos.y > 0.0 && (abs(pos.z) > 25.0)) {
+      pos.x *= 2.5; pos.x += 20.0; pos.y *= 2.0;
+      pos = vec3(rz(pos, sin(uFreq * uTime)));
+    }
+  }
+  return pos;
+`;
+
+// Warrior Teapot: warrior with sword
+const DEFORM_WARRIOR = `
+  float radius = length(pos.xz);
+  if (pos.x > 49.0) {
+    pos = vec3(rx(pos, 5.8));
+    if (pos.x > 68.0) {
+      pos.x = smoothstep(0.0, 10.0, pos.x) + 68.0;
+      pos.y *= 2.0;
+    }
+    pos = vec3(rx(pos, cos(uFreq * uTime)));
+  } else if (pos.x < -48.0) {
+    pos = vec3(ry(pos, 5.75));
+  } else if (pos.y > 21.0 && radius < 33.8) {
+    pos.y += 20.0;
+    pos = vec3(rx(pos, 1.6));
+    pos.x -= 50.0; pos.z -= 90.0;
+  } else if (abs(pos.z) < 20.0) {
+    pos.y *= 1.2;
+    if (pos.y < -33.0 && (abs(pos.x) > 7.0)) {
+      pos.y -= 5.0;
+      pos.z = pos.z / max(radius, 0.001) - 30.0;
+    }
+  }
+  return pos;
+`;
+
+// Tank Teapot: armoured vehicle with cannon
+const DEFORM_TANK = `
+  float radius = length(pos.xz);
+  if (pos.x < -50.0) {
+    pos.xy = smoothstep(vec2(0.0), vec2(10.0), pos.xy);
+    pos.x -= 28.0;
+  } else if (pos.y > 25.0 && radius < 33.0) {
+    pos.y = smoothstep(0.0, 40.0, pos.y) + 5.0;
+  } else if (radius < 50.0 && pos.y > 0.0) {
+    pos.y = smoothstep(0.0, 10.0, pos.y);
+    if (radius > 0.001) pos.xz = pos.xz / radius * 30.0;
+  } else if (radius < 52.0 && pos.y < 0.0) {
+    if (pos.y < -32.0) pos.y = smoothstep(0.0, 40.0, pos.y) - 32.0;
+    if (radius > 0.001) {
+      pos.xz /= radius;
+      pos.x += (pos.x > 0.0) ? radius : -radius;
+      pos.z *= radius * 0.7;
+    }
+  } else if (pos.x > 48.0) {
+    pos.xy = smoothstep(vec2(0.0), vec2(10.0), pos.xy);
+  }
+  // cannon
+  if (pos.y < -5.0 && pos.y > -15.0 && abs(pos.z) < 5.0 && pos.x > 48.0) {
+    pos.x += 35.0;
+    pos.y += 5.0 * sin(uTime * 5.0);
+    pos.z += cos(uTime * 5.0);
+  }
+  return pos;
+`;
+
+// Jet Teapot: sleek fighter
+const DEFORM_JET = `
+  float radius = length(pos.xz);
+  pos.y *= 0.7;
+  if (pos.x < -50.0) {
+    pos.xy = pos.xy / max(radius, 0.001);
+    pos.x -= 10.0; pos.y *= 10.0;
+  } else if (pos.x > 40.0) {
+    float l = max(length(pos.xyz), 0.001);
+    pos.xyz /= l;
+    pos.y -= 10.0; pos.x += 80.0;
+  } else if (pos.y > 25.0 && radius < 30.0) {
+    pos.y = smoothstep(0.0, 40.0, pos.y) + 8.0;
+    pos.x += 5.0;
+  } else if (radius < 50.0 && pos.y > 0.0) {
+    pos.y = smoothstep(0.0, 10.0, pos.y);
+    if (radius > 0.001) pos.xz = pos.xz / radius * 30.0;
+  } else if (pos.x > -30.0 && pos.x < 0.0 && pos.y < 0.0 && pos.y > -10.0) {
+    pos.z /= max(radius, 0.001);
+    pos.z += (pos.z > 0.0) ? radius * 2.0 : radius * -2.0;
+  } else if (pos.x < 30.0 && pos.x > 0.0) {
+    if (radius > 0.001) pos.xz /= radius;
+    pos.x += radius * 0.7;
+    pos.z *= radius * 0.7;
+  } else if (pos.x > -50.0 && pos.x < -35.0) {
+    pos.x = smoothstep(0.0, 10.0, pos.x) - 40.0;
+  }
+  return pos;
+`;
+
+// Missile Teapot: rounded missile shape
+const DEFORM_MISSILE = `
+  float radius = length(pos.xz);
+  float r = length(pos);
+  if (pos.y > 21.0 && radius < 33.8) {
+    if (r > 0.001) { pos /= r; pos *= 30.0; }
+  } else if (abs(pos.x) > 50.0) {
+    pos.x = 0.0;
+  } else if (pos.y < -35.0 && radius > 35.0) {
+    if (abs(pos.z) > 8.0 && abs(pos.x) > 8.0) pos.y -= 30.0;
+  } else {
+    if (radius > 0.001) pos.xz = pos.xz / radius * 20.0;
+  }
+  return pos;
+`;
+
+// Flying Juggernaut: large flying ship (use spherify)
+const DEFORM_JUGGERNAUT = `
+  float radius = length(pos.xz);
+  if (abs(pos.x) > 50.0) {
+    pos = smoothstep(vec3(0.0), vec3(10.0), pos);
+  } else if (pos.y > 21.0 && radius < 33.8) {
+    float r = length(pos);
+    if (r > 0.001) { pos /= r; pos *= 30.0; }
+  } else {
+    if (radius > 0.001) pos.xz = pos.xz / radius * 25.0;
+  }
+  return pos;
+`;
+
+// ─── Load teapot geometry, then create all instances ─────────────────────────
+tdsLoader.load('models/Teapot.3ds', obj => {
+  let geo;
+  obj.traverse(c => { if (c.isMesh && !geo) geo = c.geometry; });
+  if (!geo) { console.error('Teapot geometry not found'); return; }
+  geo.computeVertexNormals();
+
+  const bb = new THREE.Box3().setFromBufferAttribute(geo.attributes.position);
+  console.log('Teapot bbox:', bb.min.toArray(), bb.max.toArray());
+
+  // ── Pass 0: Sky Cube – done via scene.background ──────────────────────────
+
+  // ── Pass 5: Main Building Teapot ─────────────────────────────────────────
+  mkTeapot(geo, [360, -120, -1000], 13, 'bill.png', DEFORM_MAINBUILDING,
+    { side: THREE.DoubleSide });
+
+  // ── Pass 8: Sun Teapot ────────────────────────────────────────────────────
+  {
+    const sunVs = /* glsl */`
+      precision highp float;
+      uniform vec3 uSunPos;
+      uniform float uSize;
+      uniform float uTime;
+      ${ROTATE_HELPERS}
+      vec3 deform(vec3 p) { ${DEFORM_SPHERE} }
+      varying vec2 vUv;
+      varying vec2 vWave;
+      void main() {
+        vec3 p = deform(position);
+        p = p * uSize + uSunPos;
+        gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+        vUv = -uv;
+        vWave = uv + vec2(0.95, 0.95) * uTime;
+      }
+    `;
+    const sunFs = /* glsl */`
+      precision highp float;
+      uniform sampler2D uBase;
+      uniform sampler2D uDistort;
+      uniform float uDistortion;
+      varying vec2 vUv;
+      varying vec2 vWave;
+      void main() {
+        float noise = texture2D(uDistort, vWave).r;
+        float d = (2.0 * noise - 1.0) * uDistortion;
+        gl_FragColor = texture2D(uBase, vUv + d * vUv.y);
+      }
+    `;
+    const sunMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uSunPos:     { value: new THREE.Vector3(-2000, 1300, -2000) },
+        uSize:       { value: 5.0 },
+        uTime:       timeRef,
+        uBase:       { value: tex('FireBase.png') },
+        uDistort:    { value: tex('FireDistortion.png') },
+        uDistortion: { value: 0.4 },
+      },
+      vertexShader: sunVs,
+      fragmentShader: sunFs,
+      side: THREE.DoubleSide,
+    });
+    scene.add(new THREE.Mesh(geo, sunMat));
+  }
+
+  // ── Pass 10: Tower Teapot ─────────────────────────────────────────────────
+  mkTeapot(geo, [-1000, 120, -1320], 10, 'bill.png', DEFORM_TOWER);
+
+  // ── Pass 11: Garage Teapot (flat circular base) ───────────────────────────
+  mkTeapot(geo, [-400, -920, -920], 9.5, 'Wood.png', DEFORM_GARAGE,
+    { side: THREE.DoubleSide });
+
+  // ── Passes 12-15: Wall Teapots ────────────────────────────────────────────
+  const wallCfg = [
+    { pos: [240, -800, -1680], size: 9.5 },
+    { pos: [1080, -800, -840], size: 8.416 },
+    { pos: [-1200, -800, -840], size: 8.416 },
+    { pos: [-660, -800, 60],   size: 5.446 },
+  ];
+  const wallBumpTex = tex('FieldstoneBump.png');
+  for (const wc of wallCfg) {
+    mkTeapot(geo, wc.pos, wc.size, 'Fieldstone.png', DEFORM_WALL,
+      { side: THREE.DoubleSide, bumpTex: wallBumpTex });
+  }
+
+  // ── Passes 16-17: Turret Teapots ─────────────────────────────────────────
+  mkTeapot(geo, [200, -830, -100], 1.0, 'bill.png', DEFORM_TURRET);
+  mkTeapot(geo, [580, -880, -100], 1.0, 'bill.png', DEFORM_TURRET);
+
+  // ── Pass 18: Eroded Teapot (animated erosion with discard) ───────────────
+  {
+    const eVs = /* glsl */`
+      precision highp float;
+      uniform vec3 uOffset;
+      uniform float uSize;
+      uniform vec3 uLight;
+      uniform float uTime;
+      uniform float uFreq;
+      varying vec2 vUv;
+      varying vec3 vN, vL, vV;
+      varying vec3 vWorldPos;
+      void main() {
+        vec3 p = position;
+        p *= uSize;
+        p += uOffset;
+        // pulsate
+        p += uSize * sin(uFreq * uTime) * normalize(normal);
+        // movement
+        float mv = sin(uTime / 2.0);
+        if (mv > 0.0) p.x += uOffset.x * mv;
+        gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+        vUv = uv;
+        vN = normalize(normal);
+        vL = normalize(uLight - p);
+        vV = normalize(cameraPosition - p);
+        vWorldPos = p;
+      }
+    `;
+    const eFs = /* glsl */`
+      precision highp float;
+      uniform sampler2D uTex;
+      uniform float uErosion;
+      uniform float uIF1;
+      uniform float uIF2;
+      varying vec2 vUv;
+      varying vec3 vN, vL, vV;
+      void main() {
+        vec3 offset = vec3(-uErosion, -uErosion + 0.06, -uErosion * 0.92);
+        vec2 nc = vUv + offset.xy;
+        vec4 noiseC = texture2D(uTex, nc);
+        float intensity = uIF1 * (noiseC.r + noiseC.g + noiseC.b + noiseC.a);
+        intensity = uIF2 * abs(2.0 * intensity - 1.0);
+        if (intensity < fract(0.5 - offset.x - offset.y - offset.z)) discard;
+        vec3 N = normalize(vN), L = normalize(vL), V = normalize(vV);
+        float NdL = max(0.0, dot(N, L));
+        vec4 tc = texture2D(uTex, vUv) * intensity;
+        gl_FragColor = tc * (1.0 + NdL);
+      }
+    `;
+    const erodePos = new THREE.Vector3(500, -960, 480); // (500,-960,-480) → neg Z
+    const eMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uOffset:  { value: erodePos },
+        uSize:    { value: 2.0 },
+        uLight:   { value: LIGHT_POS },
+        uTime:    timeRef,
+        uFreq:    { value: 10.0 },
+        uTex:     { value: tex('Eroded.png') },
+        uErosion: { value: 0.4 },
+        uIF1:     { value: 0.7 },
+        uIF2:     { value: 1.95 },
+      },
+      vertexShader: eVs,
+      fragmentShader: eFs,
+    });
+    scene.add(new THREE.Mesh(geo, eMat));
+  }
+
+  // ── Pass 19: Burn Teapot (additive blend over eroded) ─────────────────────
+  {
+    const bVs = /* glsl */`
+      precision highp float;
+      uniform vec3 uOffset;
+      uniform float uSize;
+      uniform float uTime;
+      uniform float uFreq;
+      varying vec2 vUv;
+      varying vec2 vWave;
+      void main() {
+        vec3 p = position * uSize + uOffset;
+        p += uSize * sin(uFreq * uTime) * normalize(normal);
+        gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+        vUv = uv;
+        vWave = uv + vec2(0.05) * uTime;
+      }
+    `;
+    const bFs = /* glsl */`
+      precision highp float;
+      uniform sampler2D uBase, uDistort, uOpacity;
+      uniform float uDist;
+      varying vec2 vUv;
+      varying vec2 vWave;
+      void main() {
+        float noise = texture2D(uDistort, vWave).r;
+        vec2 perturb = vUv + (2.0*noise-1.0) * uDist * vUv.y;
+        vec4 c = texture2D(uBase, perturb);
+        float op = texture2D(uOpacity, vUv).r;
+        gl_FragColor = vec4(c.rgb, op);
+      }
+    `;
+    const burnMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uOffset:  { value: new THREE.Vector3(500, -960, 480) },
+        uSize:    { value: 2.0 },
+        uTime:    timeRef,
+        uFreq:    { value: 10.0 },
+        uBase:    { value: tex('FireBase.png') },
+        uDistort: { value: tex('FireDistortion.png') },
+        uOpacity: { value: tex('FireOpacity.png') },
+        uDist:    { value: 0.4 },
+      },
+      vertexShader: bVs,
+      fragmentShader: bFs,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    scene.add(new THREE.Mesh(geo, burnMat));
+  }
+
+  // ── Pass 21: Robot Teapot ─────────────────────────────────────────────────
+  mkTeapot(geo, [-460, -900, 1000], 1.0, 'cell.png', DEFORM_ROBOT);
+
+  // ── Pass 22: Warrior Teapot ───────────────────────────────────────────────
+  mkTeapot(geo, [-300, -880, 1000], 1.0, 'Wood.png', DEFORM_WARRIOR,
+    { freq: 1.0 });
+
+  // ── Pass 23: Robot Teapot Walking ─────────────────────────────────────────
+  mkTeapot(geo, [420, -850, -260], 1.0, 'cell.png', DEFORM_ROBOT);
+
+  // ── Pass 24: Tank Teapot ──────────────────────────────────────────────────
+  mkTeapot(geo, [-1000, -970, -450], 1.0, 'cell.png', DEFORM_TANK);
+
+  // ── Pass 25: Tank Bombarding ──────────────────────────────────────────────
+  mkTeapot(geo, [-720, -900, 540], 3.0, 'cell.png', DEFORM_TANK);
+
+  // ── Pass 26: Cannonball Teapot ────────────────────────────────────────────
+  mkTeapot(geo, [-450, -900, 535], 0.803, 'rustymetal.png', DEFORM_SPHERE);
+
+  // ── Pass 27: Robot Teapot Bombarded ──────────────────────────────────────
+  mkTeapot(geo, [1720, -850, 560], 1.0, 'cell.png', DEFORM_ROBOT);
+
+  // ── Pass 31: Tank Teapot_2 ────────────────────────────────────────────────
+  mkTeapot(geo, [-780, -850, 980], 1.0, 'cell.png', DEFORM_TANK);
+
+  // ── Pass 32: Flying Juggernaut Teapot ─────────────────────────────────────
+  mkTeapot(geo, [1000, 620, -380], 1.0, 'MarbleClouds.png', DEFORM_JUGGERNAUT);
+
+  // ── Pass 33: Jet Teapot (orbiting) ────────────────────────────────────────
+  {
+    const jetVs = /* glsl */`
+      precision highp float;
+      uniform float uSize;
+      uniform vec3 uJetPos;
+      uniform float uSlide;
+      uniform float uFreq;
+      uniform vec3 uLight;
+      uniform float uTime;
+      ${ROTATE_HELPERS}
+      vec3 deform(vec3 pos) { ${DEFORM_JET} }
+      varying vec2 vUv;
+      varying vec3 vN, vL, vV;
+      void main() {
+        vec3 p = deform(position);
+        p = p * uSize;
+        p.y += uJetPos.y;
+        p = rx(p, uSlide);
+        float anime = uFreq * uTime;
+        p = ry(p, anime);
+        p.x += uJetPos.x * sin(anime);
+        p.z += uJetPos.z * cos(anime);
+        // negate Z for handedness
+        p.z = -p.z;
+        gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+        vUv = uv;
+        vN = normalize(normal);
+        vL = normalize(uLight - p);
+        vV = normalize(cameraPosition - p);
+      }
+    `;
+    const jetMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uSize:   { value: 1.0 },
+        uJetPos: { value: new THREE.Vector3(500, 500, 500) },
+        uSlide:  { value: -0.5656 },
+        uFreq:   { value: 1.0 },
+        uLight:  { value: LIGHT_POS },
+        uTime:   timeRef,
+        uTex:    { value: tex('rustymetal.png') },
+        uSpcPow: { value: 2.0 },
+      },
+      vertexShader: jetVs,
+      fragmentShader: PHONG_FS,
+    });
+    scene.add(new THREE.Mesh(geo, jetMat));
+  }
+
+  // ── Pass 37: Jet Teapot Scout ─────────────────────────────────────────────
+  mkTeapot(geo, [500, 600, -1000], 1.0, 'rustymetal.png', DEFORM_JET);
+
+  // ── Pass 39: Jet Teapot Bombarding ────────────────────────────────────────
+  mkTeapot(geo, [-1000, 500, 200], 1.0, 'rustymetal.png', DEFORM_JET);
+
+  // ── Pass 41: Missile Teapot ───────────────────────────────────────────────
+  mkTeapot(geo, [-600, 440, 200], 0.48, 'rustymetal.png', DEFORM_MISSILE);
+
+  // ── Pass 44: Glass Teapot (cubemap reflection) ────────────────────────────
+  {
+    const gVs = /* glsl */`
+      precision highp float;
+      uniform float uSize;
+      uniform vec3 uOffset;
+      ${ROTATE_HELPERS}
+      vec3 deform(vec3 pos) { ${DEFORM_SPHERE} }
+      varying vec3 vNormal;
+      varying vec3 vWorldPos;
+      void main() {
+        vec3 p = deform(position) * uSize + uOffset;
+        gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+        vNormal = normal;
+        vWorldPos = p;
+      }
+    `;
+    const gFs = /* glsl */`
+      precision highp float;
+      uniform samplerCube uEnv;
+      uniform float uIOR;
+      uniform float uIntensity;
+      varying vec3 vNormal;
+      varying vec3 vWorldPos;
+      void main() {
+        vec3 N = normalize(vNormal);
+        vec3 V = normalize(cameraPosition - vWorldPos);
+        vec3 reflDir = reflect(-V, N);
+        reflDir.z = -reflDir.z;
+        vec3 refrDir = refract(-V, N, uIOR);
+        refrDir.z = -refrDir.z;
+        vec4 refl = textureCube(uEnv, reflDir);
+        vec4 refr = textureCube(uEnv, refrDir);
+        float c = dot(V, N);
+        float fresnel = pow(1.0 - abs(c), 2.0);
+        gl_FragColor = mix(refr, refl, fresnel) * uIntensity;
+      }
+    `;
+    const envCube = new THREE.CubeTextureLoader().setPath('textures/').load([
+      'sky_px.png','sky_nx.png','sky_py.png','sky_ny.png','sky_pz.png','sky_nz.png'
+    ]);
+    const gMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uSize:      { value: 1.0 },
+        uOffset:    { value: new THREE.Vector3(-840, -770, -1740) },
+        uEnv:       { value: envCube },
+        uIOR:       { value: 0.67 },
+        uIntensity: { value: 1.0 },
+      },
+      vertexShader: gVs,
+      fragmentShader: gFs,
+      side: THREE.DoubleSide,
+      transparent: true,
+    });
+    scene.add(new THREE.Mesh(geo, gMat));
+
+    // ── Pass 45: Glass Ball Teapot ──────────────────────────────────────────
+    const gMat2 = gMat.clone();
+    gMat2.uniforms = Object.assign({}, gMat.uniforms, {
+      uSize:   { value: 2.0 },
+      uOffset: { value: new THREE.Vector3(-1500, -780, -1860) },
+      uEnv:    { value: envCube },
+    });
+    scene.add(new THREE.Mesh(geo, gMat2));
+  }
+});
+
+// ─── Terrain ──────────────────────────────────────────────────────────────────
+tdsLoader.load('models/Terrain.3ds', obj => {
+  let geo;
+  obj.traverse(c => { if (c.isMesh && !geo) geo = c.geometry; });
+  if (!geo) { console.error('Terrain not found'); return; }
+  geo.computeVertexNormals();
+
+  const terrVs = /* glsl */`
+    precision highp float;
+    uniform float uSize;
+    uniform float uHeight;
+    uniform vec3 uOffset;
+    uniform vec3 uLight;
+    varying vec2 vUv;
+    varying vec3 vN, vL, vV;
+    varying vec3 vWorldPos;
+    void main() {
+      vec3 p = position;
+      p *= uSize;
+      p.y *= uHeight;
+      p += uOffset;
+      gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+      vUv = uv;
+      vN = normalize(normal);
+      vL = normalize(uLight - p);
+      vV = normalize(cameraPosition - p);
+      vWorldPos = p;
+    }
+  `;
+  const terrFs = /* glsl */`
+    precision highp float;
+    uniform sampler2D uSurface;
+    uniform sampler2D uBump;
+    uniform vec4 uTerrainColor;
+    varying vec2 vUv;
+    varying vec3 vN, vL, vV;
+    varying vec3 vWorldPos;
+
+    void main() {
+      vec3 N = normalize(vN);
+      vec3 dp1 = dFdx(vWorldPos), dp2 = dFdy(vWorldPos);
+      vec2 du1 = dFdx(vUv), du2 = dFdy(vUv);
+      vec3 T = normalize(dp1*du2.y - dp2*du1.y);
+      vec3 B = normalize(cross(N, T));
+      mat3 TBN = mat3(T, B, N);
+      vec3 bN = TBN * (texture2D(uBump, vUv).xyz * 2.0 - 1.0);
+      bN = normalize(bN);
+
+      vec3 L = normalize(vL);
+      float NdL = max(0.0, dot(bN, L));
+      vec4 tc = texture2D(uSurface, vUv);
+      gl_FragColor = tc * uTerrainColor * (1.0 + NdL);
+    }
+  `;
+  const terrMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uSize:         { value: 6.0 },
+      uHeight:       { value: 0.7 },
+      uOffset:       { value: new THREE.Vector3(0, -700, 0) },
+      uLight:        { value: LIGHT_POS },
+      uSurface:      { value: tex('sand.png') },
+      uBump:         { value: tex('sandBump.png') },
+      uTerrainColor: { value: new THREE.Vector4(0.60, 0.56, 0.56, 1.0) },
+    },
+    vertexShader: terrVs,
+    fragmentShader: terrFs,
+    side: THREE.DoubleSide,
+    extensions: { derivatives: true },
+  });
+  scene.add(new THREE.Mesh(geo, terrMat));
+});
+
+// ─── Water ────────────────────────────────────────────────────────────────────
+tdsLoader.load('models/ScreenAlignedQuad.3ds', obj => {
+  let geo;
+  obj.traverse(c => { if (c.isMesh && !geo) geo = c.geometry; });
+  if (!geo) {
+    // Fallback: unit plane
+    geo = new THREE.PlaneGeometry(2, 2);
+  }
+
+  const waterVs = /* glsl */`
+    precision highp float;
+    uniform float uSize;
+    uniform vec3 uOffset;
+    varying vec2 vUv;
+    vec3 rx(vec3 p, float a) {
+      float c=cos(a), s=sin(a);
+      return vec3(p.x, c*p.y-s*p.z, s*p.y+c*p.z);
+    }
+    void main() {
+      vec3 p = rx(position, 1.6) * uSize + uOffset;
+      gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+      vUv = uv;
+    }
+  `;
+  const waterFs = /* glsl */`
+    precision highp float;
+    uniform sampler2D uSurface;
+    uniform sampler2D uWave;
+    uniform float uTime;
+    uniform float uScale;
+    uniform float uFreq;
+    uniform vec4 uColor;
+    varying vec2 vUv;
+    void main() {
+      float disp = sin(uFreq * uTime + 20.0 * vUv.x * vUv.y);
+      vec2 wave = uScale * texture2D(uWave, vUv).rg;
+      vec4 c = uColor * texture2D(uSurface, vUv + wave * disp);
+      c.b = 0.9;
+      gl_FragColor = c;
+    }
+  `;
+
+  const waterConfigs = [
+    { pos: [-1200, -800, -2000], size: 500 },
+    { pos: [ 550,  -950, -2000], size: 500 },
+    { pos: [-2100, -700,  1700], size: 600 },
+  ];
+
+  const wSurface = tex('oceanEnvMap.png');
+  const wWave    = tex('clouds.png');
+  const wColor   = new THREE.Vector4(0.018, 0.377, 1.0, 1.0);
+
+  for (const wc of waterConfigs) {
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uSize:    { value: wc.size },
+        uOffset:  { value: new THREE.Vector3(...wc.pos) },
+        uSurface: { value: wSurface },
+        uWave:    { value: wWave },
+        uTime:    timeRef,
+        uScale:   { value: 0.15 },
+        uFreq:    { value: 0.61 },
+        uColor:   { value: wColor },
+      },
+      vertexShader: waterVs,
+      fragmentShader: waterFs,
+      side: THREE.DoubleSide,
+    });
+    scene.add(new THREE.Mesh(geo, mat));
+  }
+});
+
+// ─── Flag ─────────────────────────────────────────────────────────────────────
+objLoader.load('models/TesselatedPlane.obj', obj => {
+  let geo;
+  obj.traverse(c => { if (c.isMesh && !geo) geo = c.geometry; });
+  if (!geo) return;
+  geo.computeVertexNormals();
+
+  const flagVs = /* glsl */`
+    precision highp float;
+    uniform float uSize;
+    uniform vec3 uOffset;
+    uniform float uTime;
+    uniform float uFreq;
+    uniform float uStiffness;
+    varying vec2 vUv;
+    void main() {
+      vec3 p = position;
+      p.x += 0.5; p.z += 0.5;
+      vec2 flip = uv;
+      vec3 angles = vec3(
+        (p.z - uTime) * uFreq,
+        (p.x - sin(uTime)) * uFreq,
+        (p.z - sin(uTime)) * uFreq
+      );
+      p.y += sin(angles.x) * flip.x + cos(angles.z / uFreq);
+      p.y += sin(angles.y) * flip.x;
+      p.y *= uStiffness * flip.x;
+      p.z += uStiffness * sin(p.x * uFreq / 2.0 - uFreq * uTime) * p.x;
+      p = p * uSize + uOffset;
+      gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+      vUv = uv;
+    }
+  `;
+  const flagFs = /* glsl */`
+    precision highp float;
+    uniform vec4 uFlagColor;
+    varying vec2 vUv;
+    void main() {
+      // Black flag with simple teapot-silhouette approximation
+      vec2 uvc = vUv - 0.5;
+      float body = smoothstep(0.22, 0.20, length(uvc));
+      float spout = smoothstep(0.08, 0.06, length(uvc - vec2(0.22, 0.05)));
+      float handle = smoothstep(0.06, 0.04, length(uvc + vec2(0.20, 0.0)));
+      float shape = max(body, max(spout, handle));
+      gl_FragColor = mix(vec4(0.0, 0.0, 0.0, 1.0), vec4(1.0), shape);
+    }
+  `;
+  const flagMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uSize:      { value: 350.0 },
+      uOffset:    { value: new THREE.Vector3(520, 240, -950) },
+      uTime:      timeRef,
+      uFreq:      { value: 0.75 },
+      uStiffness: { value: 0.3 },
+      uFlagColor: { value: new THREE.Vector4(1, 0.94, 0.94, 1) },
+    },
+    vertexShader: flagVs,
+    fragmentShader: flagFs,
+    side: THREE.DoubleSide,
+  });
+  scene.add(new THREE.Mesh(geo, flagMat));
+});
+
+// ─── Billboard sprites (fire / smoke) ────────────────────────────────────────
+function addBillboard(texName, worldPos, scale, opts = {}) {
+  const mat = new THREE.SpriteMaterial({
+    map: tex(texName),
+    transparent: true,
+    blending: opts.additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+    depthWrite: false,
+    opacity: opts.opacity ?? 1.0,
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.position.set(...worldPos);
+  sprite.scale.set(scale, scale, 1);
+  scene.add(sprite);
+  return sprite;
+}
+
+// Sun Fire (pass 9)
+addBillboard('FireBase.png',  [-2000, 1300, -2000], 400, { additive: true });
+
+// Robot Burn + Smoke (passes 28-29)
+addBillboard('Flame.png',       [1700, -830, 560], 32,  { additive: true });
+addBillboard('statueSmoke.png', [1700, -830, 560], 54,  { opacity: 0.6 });
+
+// Smoke near building (pass 20)
+addBillboard('Smoke.png', [0, -180, -140], 200, { opacity: 0.5 });
+
+// Jet fires
+addBillboard('FireBase.png', [ 500, 600, -1000], 16, { additive: true });
+addBillboard('FireBase.png', [-1000, 500,  200], 16, { additive: true });
+addBillboard('FireBase.png', [  500, 500, -500], 16, { additive: true });
+
+// Missile fire & explosion
+addBillboard('FireBase.png', [-600, 440, 200], 35, { additive: true });
+addBillboard('Flame.png',    [ -30, -900,-220], 100, { additive: true });
+
+// ─── Animated fire sprites (time-based UV scroll) ─────────────────────────────
+// For passes where the shader uses distortion, we approximate with two overlapping sprites.
+// The base color sprite:
+const fireBillboardMats = [];
+function addAnimFire(worldPos, scale) {
+  const baseMat = new THREE.SpriteMaterial({
+    map: tex('FireBase.png'),
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const s = new THREE.Sprite(baseMat);
+  s.position.set(...worldPos);
+  s.scale.set(scale, scale * 1.5, 1);
+  scene.add(s);
+  fireBillboardMats.push(baseMat);
+  return s;
+}
+
+addAnimFire([-2000, 1300, -2000], 400);
+
+// ─── Animate ─────────────────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta();
+  timeRef.value += dt;
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

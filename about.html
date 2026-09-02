@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About — My Little Playground</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #06080f;
+      color: #cde;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(60, 120, 200, .08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(60, 120, 200, .08) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: relative;
+      z-index: 1;
+      padding: 20px 28px 0;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    nav a {
+      color: #7af;
+      text-decoration: none;
+      font-size: .85rem;
+      letter-spacing: .04em;
+      opacity: .7;
+      transition: opacity .18s;
+    }
+
+    nav a:hover {
+      opacity: 1;
+    }
+
+    nav a::before {
+      content: '← ';
+    }
+
+    /* ── Header ── */
+    header {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 48px 24px 40px;
+    }
+
+    header h1 {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 700;
+      letter-spacing: .04em;
+      color: #fff;
+      text-shadow: 0 0 40px rgba(80, 160, 255, .5);
+    }
+
+    header p {
+      margin-top: 10px;
+      font-size: .95rem;
+      color: #89a;
+      letter-spacing: .02em;
+    }
+
+    /* ── Main content ── */
+    main {
+      position: relative;
+      z-index: 1;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 28px 80px;
+      display: flex;
+      flex-direction: column;
+      gap: 48px;
+    }
+
+    /* ── Section ── */
+    section {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .section-heading h2 {
+      font-size: .72rem;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #556;
+      white-space: nowrap;
+    }
+
+    .section-heading::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(80, 140, 220, .15);
+    }
+
+    .prose {
+      font-size: .95rem;
+      color: #9ab;
+      line-height: 1.75;
+    }
+
+    .prose strong {
+      color: #cde;
+      font-weight: 600;
+    }
+
+    /* ── Skill chips ── */
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .chip {
+      font-size: .78rem;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 5px 12px;
+      border-radius: 5px;
+      background: rgba(80, 140, 220, .12);
+      color: #7af;
+      border: 1px solid rgba(80, 140, 220, .22);
+    }
+
+    /* ── Timeline ── */
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      border-left: 1px solid rgba(80, 140, 220, .2);
+      margin-left: 8px;
+    }
+
+    .timeline-item {
+      position: relative;
+      padding: 0 0 28px 28px;
+    }
+
+    .timeline-item:last-child {
+      padding-bottom: 0;
+    }
+
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -5px;
+      top: 6px;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: rgba(80, 160, 255, .5);
+      border: 1px solid rgba(80, 160, 255, .8);
+    }
+
+    .timeline-year {
+      font-size: .72rem;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: #557;
+      margin-bottom: 4px;
+    }
+
+    .timeline-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #e8f0ff;
+      margin-bottom: 2px;
+    }
+
+    .timeline-place {
+      font-size: .85rem;
+      color: #7af;
+      margin-bottom: 8px;
+    }
+
+    .timeline-desc {
+      font-size: .88rem;
+      color: #778;
+      line-height: 1.6;
+    }
+
+    /* ── Footer ── */
+    footer {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 0 0 32px;
+      font-size: .78rem;
+      color: #445;
+    }
+  </style>
+</head>
+
+<body>
+
+  <nav><a href="index.html">Playground</a></nav>
+
+  <header>
+    <h1>About Me</h1>
+    <p>Games programmer · Lecturer · Lifelong tinkerer</p>
+  </header>
+
+  <main>
+
+    <section>
+      <div class="section-heading">
+        <h2>Hello</h2>
+      </div>
+      <p class="prose">
+        Hi, I'm <strong>Yee Song</strong> — a games programmer who has spent years pushing pixels,
+        simulating physics, and teaching others to do the same. I hold an
+        <strong>MSc in Computer Science for Games Programming</strong> from the University of Hull
+        and have worked across real-time graphics, AI, and simulation ever since.
+      </p>
+      <p class="prose">
+        This playground is a collection of projects old and new — from my postgrad work with C++ and
+        OpenGL to interactive web demos and step-by-step tutorials. Everything here is something I
+        built, broke, fixed, and (eventually) ported.
+      </p>
+    </section>
+
+    <section>
+      <div class="section-heading">
+        <h2>Technologies</h2>
+      </div>
+      <div class="chips">
+        <span class="chip">C++</span>
+        <span class="chip">OpenGL</span>
+        <span class="chip">DirectX</span>
+        <span class="chip">JavaScript</span>
+        <span class="chip">Swift</span>
+        <span class="chip">Win32</span>
+        <span class="chip">iOS</span>
+        <span class="chip">Android</span>
+        <span class="chip">PSP SDK</span>
+        <span class="chip">Python</span>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-heading">
+        <h2>Background</h2>
+      </div>
+      <div class="timeline">
+
+        <div class="timeline-item">
+          <div class="timeline-year">Sep 2023 – </div>
+          <div class="timeline-title">Senior Software Engineer</div>
+          <div class="timeline-place">King</div>
+          <div class="timeline-desc">
+            Crushing Candies again.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-year">Feb 2022 – Aug 2022</div>
+          <div class="timeline-title">Software Engineer</div>
+          <div class="timeline-place">Dice</div>
+          <div class="timeline-desc">
+            Craft automation.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-year">Aug 2020 – Jan 2022</div>
+          <div class="timeline-title">Performance squad Software Engineer</div>
+          <div class="timeline-place">Spotify</div>
+          <div class="timeline-desc">
+            Keeper of the time.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-year">Sep 2019 – Jul 2020</div>
+          <div class="timeline-title">Senior C++ Developer</div>
+          <div class="timeline-place">SG Digital</div>
+          <div class="timeline-desc">
+            Bingo.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-year">Jun 2017 – Aug 2019</div>
+          <div class="timeline-title">C++ Developer</div>
+          <div class="timeline-place">King</div>
+          <div class="timeline-desc">
+            Crushing Candies.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-year">Nov 2014 – May 2017</div>
+          <div class="timeline-title">C++ Developer / System Engineer</div>
+          <div class="timeline-place">SWIFT</div>
+          <div class="timeline-desc">
+            Alliance Access.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-year">Dec 2013 – </div>
+          <div class="timeline-title">Games Programmer</div>
+          <div class="timeline-place">Waterpine Studio</div>
+          <div class="timeline-desc">
+            Crafting fun ideas with C++.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-year">Sep 2009 – Sep 2010</div>
+          <div class="timeline-title">MSc Computer Science for Games Programming</div>
+          <div class="timeline-place">University of Hull</div>
+          <div class="timeline-desc">
+            Real-time rendering, simulation, AI, concurrency, and C++ game systems.
+            Dissertation focused on emergent flocking behaviour applied to game AI.
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer>© 2026 Waterpine Studio. All rights reserved.</footer>
+
+</body>
+
+</html>

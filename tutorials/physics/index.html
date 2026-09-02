@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Physics Tutorial — Sora</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #06080f;
+      color: #cde;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(60, 120, 200, .06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(60, 120, 200, .06) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 40px 24px 24px;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 0 30px rgba(80, 160, 255, .5);
+    }
+
+    header p {
+      margin-top: 8px;
+      font-size: .9rem;
+      color: #89a;
+    }
+
+    #back {
+      position: fixed;
+      top: 12px;
+      left: 14px;
+      color: #adf;
+      font: 11px/1 monospace;
+      text-decoration: none;
+      opacity: 0.7;
+      transition: opacity .2s;
+      z-index: 10;
+    }
+
+    #back:hover {
+      opacity: 1;
+    }
+
+    main {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px 60px;
+    }
+
+    .section-title {
+      font-size: .7rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #556;
+      margin: 32px 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(80, 140, 220, .12);
+    }
+
+    .demos {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .demo-card {
+      background: rgba(12, 18, 35, 0.75);
+      border: 1px solid rgba(80, 140, 220, .15);
+      border-radius: 10px;
+      overflow: hidden;
+      backdrop-filter: blur(4px);
+    }
+
+    .demo-label {
+      display: block;
+      font-size: .72rem;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: #7af;
+      text-decoration: none;
+      padding: 8px 12px 6px;
+    }
+
+    .demo-card canvas {
+      display: block;
+      width: 100%;
+      height: 220px;
+      background: #000;
+      cursor: crosshair;
+    }
+
+    .demo-card canvas:focus {
+      outline: 1px solid rgba(80, 160, 255, .4);
+    }
+
+    #side-panel {
+      padding: 0 12px 8px;
+      font-size: .75rem;
+      color: #cde;
+    }
+
+    .controls {
+      padding: 6px 12px 10px;
+      font-size: .68rem;
+      color: #445;
+    }
+  </style>
+</head>
+
+<body>
+
+  <a id="back" href="../../">← back</a>
+
+  <header>
+    <h1>Physics Tutorial</h1>
+    <p>Agent locomotion, sensing, and AI behaviour demos</p>
+  </header>
+
+  <main>
+
+    <div class="section-title">Locomotion</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Motion">Motion</a>
+        <canvas id="cvsMotion" width="320" height="220"></canvas>
+        <div class="controls">↑ Thrust &nbsp;·&nbsp; ← → Rotate &nbsp;·&nbsp; ↓ Brake</div>
+      </div>
+
+    </div>
+
+    <div class="section-title">Sensing</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Sensing">Sensing</a>
+        <canvas id="cvsSensing" width="320" height="220"></canvas>
+        <div class="controls">Click / move mouse &nbsp;·&nbsp; Q = rotation mode &nbsp;·&nbsp; E = sensory mode</div>
+      </div>
+
+    </div>
+
+    <div class="section-title">AI Behaviour</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Reaction">Reaction</a>
+        <canvas id="cvsReaction" width="320" height="220"></canvas>
+        <div class="controls">↑ / ← → move player &nbsp;·&nbsp; Q = AI mode &nbsp;·&nbsp; E = sensory mode</div>
+      </div>
+
+    </div>
+
+    <div class="section-title">Background</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Scroll">Scroll</a>
+        <canvas id="cvsScroll" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move &nbsp;·&nbsp; 4-layer parallax</div>
+      </div>
+
+    </div>
+
+    <div class="section-title">State Machine</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=FSM">RPG — FSM</a>
+        <canvas id="cvsFSM" width="320" height="220"></canvas>
+        <div id="side-panel"></div>
+        <div class="controls">Configure settings &nbsp;·&nbsp; Next Turn / Simulate All</div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script src="js/common.js"></script>
+  <script src="js/Motion.js"></script>
+  <script src="js/Sensing.js"></script>
+  <script src="js/Reaction.js"></script>
+  <script src="js/Scroll.js"></script>
+  <script src="js/FSM.js"></script>
+
+</body>
+
+</html>

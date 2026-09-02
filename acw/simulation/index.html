@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Simulation — Physics Playground</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; }
+    canvas { display: block; }
+
+    #back {
+      position: fixed; top: 10px; left: 12px;
+      color: #adf; font: 11px/1 monospace;
+      text-decoration: none; opacity: 0.7;
+      transition: opacity .2s;
+      z-index: 10;
+    }
+    #back:hover { opacity: 1; }
+
+    #hud {
+      position: fixed; top: 10px; right: 12px;
+      color: #ffff00; font: 11px/1.7 monospace;
+      text-align: right; pointer-events: none;
+      text-shadow: 0 0 4px #000;
+    }
+
+    #help-overlay {
+      position: fixed; inset: 0;
+      background: rgba(10, 10, 60, 0.85);
+      color: #ffff99; font: 13px/1.9 monospace;
+      display: none; padding: 30px 40px;
+      overflow-y: auto;
+    }
+    #help-overlay h2 { font-size: 15px; margin-bottom: 14px; color: #adf; }
+    #help-overlay table { border-collapse: collapse; }
+    #help-overlay td { padding: 0 24px 0 0; }
+    #help-overlay td:first-child { color: #7cf; min-width: 120px; }
+  </style>
+</head>
+<body>
+<a id="back" href="../../">← back</a>
+<canvas id="canvas"></canvas>
+<div id="hud"></div>
+<div id="help-overlay">
+  <h2>C++ &amp; OpenGL ACW 2009 &nbsp;|&nbsp; WebGL / Three.js Port</h2>
+  <table>
+    <tr><td>H</td><td>Toggle this help</td></tr>
+    <tr><td>P</td><td>Toggle world auto-rotation</td></tr>
+    <tr><td>← / →</td><td>Rotate world left / right (around Z)</td></tr>
+    <tr><td>↑ / ↓</td><td>Tilt world up / down (around X)</td></tr>
+    <tr><td>A</td><td>Cycle animation: off → sin-wave → helix</td></tr>
+    <tr><td>M</td><td>Cycle display mode: flat → smooth → phong → textured → wireframe</td></tr>
+    <tr><td>N</td><td>Toggle vertex normals</td></tr>
+    <tr><td>S</td><td>Cycle shadows: off → wall → full</td></tr>
+    <tr><td>G</td><td>Toggle fog</td></tr>
+    <tr><td>B</td><td>Toggle bloom</td></tr>
+    <tr><td>K</td><td>Toggle spotlight beam cones</td></tr>
+    <tr><td>L</td><td>Toggle all spotlights</td></tr>
+    <tr><td>1 – 8</td><td>Toggle individual spotlight</td></tr>
+    <tr><td>W</td><td>Change scene: normal → particle → glow ball → …</td></tr>
+    <tr><td>E</td><td>Add next object to scene</td></tr>
+    <tr><td>R</td><td>Remove last object from scene</td></tr>
+    <tr><td>C</td><td>Cycle spotlight focus object</td></tr>
+    <tr><td>Left drag</td><td>Zoom in / out</td></tr>
+    <tr><td>Right drag / scroll</td><td>Rotate camera around scene</td></tr>
+  </table>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer }   from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }        from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass }   from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { VertexNormalsHelper } from 'three/addons/helpers/VertexNormalsHelper.js';
+
+// ═══════════════════════════════════════════════════════════════════
+//  CONSTANTS from script.txt
+// ═══════════════════════════════════════════════════════════════════
+
+const BOX_SIZE  = 20;    // box half-extent; spans -20..+20 per axis
+const WORLD_VEL = 3.0;   // deg/s when auto-spinning
+const BOUNDS    = BOX_SIZE - 2.5;
+
+// 8 corner spotlights — positions are ±1 in script, scaled by BOX_SIZE
+const SPOT_CFG = [
+  { px: 1, py: 1, pz: 1,  hex: 0xff3333, cutoff: 40 },
+  { px:-1, py: 1, pz: 1,  hex: 0x33ff33, cutoff: 30 },
+  { px:-1, py:-1, pz: 1,  hex: 0x3333ff, cutoff: 30 },
+  { px: 1, py:-1, pz: 1,  hex: 0xffffff, cutoff: 30 },
+  { px: 1, py: 1, pz:-1,  hex: 0xffffff, cutoff: 30 },
+  { px:-1, py: 1, pz:-1,  hex: 0xffffff, cutoff: 30 },
+  { px:-1, py:-1, pz:-1,  hex: 0xffffff, cutoff: 30 },
+  { px: 1, py:-1, pz:-1,  hex: 0xffffff, cutoff: 30 },
+];
+
+// Objects: type, size, initial pos (script Z-up coords), diffuse color, texture key, animation constants
+// anime: [Ax,Bx,Cx,Dx,  Ay,By,Cy,Dy,  Az,Bz,Cz,Dz]
+const OBJ_CFG = [
+  { type:'null',         size:1, pos:[0,0,0],      hex:0xffffff, tex:null },
+  { type:'tetrahedron',  size:3, pos:[3,2,-3],     hex:0x8833ff, tex:'tetra',
+    anime:[2,-1.5,3.8,2.8,  2.5,2.8,-1,-3.1,   3.8,4,2.5,5.1] },
+  { type:'octahedron',   size:2, pos:[7,2,8.6],    hex:0xbb44ff, tex:'octahedron',
+    anime:[3,2.5,4,2,        2.7,2.5,6,3.5,      3,2,2,2.8] },
+  { type:'cube',         size:1, pos:[-2,-5,4],    hex:0xbb44ff, tex:'box',
+    anime:[3,0,3.8,-3,      -1.5,2.8,1,-3.1,      1.8,-1,2.5,-4.1] },
+  { type:'tetrahedron',  size:2, pos:[-3,2.8,-3],  hex:0x8833ff, tex:'tetra',
+    anime:[2,-3.5,3.8,2.8,   2.5,2.8,-2,-3.1,   3.8,4,2.5,5.1] },
+  { type:'icosahedron',  size:2, pos:[2,-4,3],     hex:0xffccff, tex:'icosa',
+    anime:[2.5,-1.5,3,4,     4.7,3.5,5,3,         2,7,2,3] },
+  { type:'sphere',       size:1, pos:[-11,3,2],    hex:0xffffff, tex:'magma',
+    anime:[4,5,3,2.5,        5,6,8,6.5,            2.5,3.5,4.5,5] },
+  { type:'dodecahedron', size:2, pos:[0,-5,0],     hex:0xff00ff, tex:'dodeca',
+    anime:[2,3.5,3,1,        1.5,2.5,1,3,          3.5,3,4,3] },
+];
+
+const GLOW_CFG = {
+  size:3, pos:[0,0.1,0], hex:0x0033ff,
+  anime:[4,5,3,2.5, 5,6,8,6.5, 2.5,3.5,4.5,5],
+  lightColors:[0xff2222, 0x22ff22, 0x2222ff, 0xffff00, 0xff00ff, 0x00ffff],
+};
+
+const PBALL_CFG = {
+  size:1, pos:[-1,-1,-1], hex:0x0033ff,
+  anime:[3,-3.8,-3,3, 5,6.5,-4.8,6.5, -3.8,-3,7.5,5.5],
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  RENDERER
+// ═══════════════════════════════════════════════════════════════════
+
+const canvas   = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+
+// ═══════════════════════════════════════════════════════════════════
+//  SCENE + CAMERA
+// ═══════════════════════════════════════════════════════════════════
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.5, 400);
+camera.position.set(0, 0, 50);
+
+// sceneRoot makes script's Z-axis (vertical in Requirements) render upward on screen.
+// rotation.x = -π/2  maps  script-Z → screen-up,  script-Y → screen-depth.
+const sceneRoot = new THREE.Group();
+sceneRoot.rotation.x = -Math.PI / 2;
+scene.add(sceneRoot);
+
+// worldGroup is rotated by the P key / arrow keys around its own local Z (= vertical).
+const worldGroup = new THREE.Group();
+sceneRoot.add(worldGroup);
+
+// Very dim scene ambient (matches original black ambient)
+scene.add(new THREE.AmbientLight(0x151515));
+
+// ═══════════════════════════════════════════════════════════════════
+//  TEXTURES
+// ═══════════════════════════════════════════════════════════════════
+
+const texLoader = new THREE.TextureLoader();
+
+function loadTex(name) {
+  const tex = texLoader.load(
+    `texture/${name}.png`,
+    undefined, undefined,
+    (err) => console.warn(`Texture "${name}" failed to load`, err)
+  );
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+const TEX = {
+  ocean:       loadTex('ocean'),
+  tetra:       loadTex('tetra'),
+  octahedron:  loadTex('octahedron'),
+  box:         loadTex('box'),
+  icosa:       loadTex('icosa'),
+  magma:       loadTex('magma'),
+  dodeca:      loadTex('dodeca'),
+  stone:       loadTex('stone'),
+  P0:          loadTex('P0'),
+  P1:          loadTex('P1'),
+  P2:          loadTex('P2'),
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  BOX  (semi-transparent, normals inward = BackSide)
+// ═══════════════════════════════════════════════════════════════════
+
+const boxMat = new THREE.MeshPhongMaterial({
+  map: TEX.ocean, transparent: true, opacity: 0.28,
+  side: THREE.BackSide, depthWrite: false, shininess: 10,
+});
+const boxMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(BOX_SIZE*2, BOX_SIZE*2, BOX_SIZE*2, 8, 8, 8),
+  boxMat
+);
+boxMesh.receiveShadow = true;
+worldGroup.add(boxMesh);
+
+// ═══════════════════════════════════════════════════════════════════
+//  SPOTLIGHTS
+// ═══════════════════════════════════════════════════════════════════
+
+const spotData  = [];  // { light, cone, beamMesh, basePos, cfg }
+const lightOn   = Array(8).fill(true);
+
+for (let i = 0; i < 8; i++) {
+  const cfg = SPOT_CFG[i];
+  const bx  = cfg.px * BOX_SIZE;
+  const by  = cfg.py * BOX_SIZE;
+  const bz  = cfg.pz * BOX_SIZE;
+  const basePos = new THREE.Vector3(bx, by, bz);
+
+  // Spot light — decay=0 matches OpenGL fixed-function behaviour
+  const light = new THREE.SpotLight(cfg.hex, 2.8);
+  light.position.copy(basePos);
+  light.target.position.set(0, 0, 0);
+  light.angle    = THREE.MathUtils.degToRad(cfg.cutoff * 0.65);
+  light.penumbra = 0.3;
+  light.decay    = 0;
+  light.distance = 0;   // unlimited
+  light.castShadow = true;
+  light.shadow.mapSize.set(512, 512);
+  light.shadow.camera.near = 1;
+  light.shadow.camera.far  = BOX_SIZE * 6;
+  worldGroup.add(light);
+  worldGroup.add(light.target);
+
+  // Small solid cone at the corner to represent the physical light
+  const coneGeo = new THREE.ConeGeometry(1.2, 2.8, 10);
+  const coneMat = new THREE.MeshBasicMaterial({ color: cfg.hex });
+  const cone    = new THREE.Mesh(coneGeo, coneMat);
+  cone.position.copy(basePos);
+  worldGroup.add(cone);
+
+  // Beam line from corner to focus (shown when K is pressed)
+  const beamGeo = new THREE.BufferGeometry().setFromPoints([
+    basePos.clone(), new THREE.Vector3(0, 0, 0)
+  ]);
+  const beamMat  = new THREE.LineBasicMaterial({ color: cfg.hex, transparent: true, opacity: 0.35 });
+  const beamLine = new THREE.Line(beamGeo, beamMat);
+  beamLine.visible = false;
+  worldGroup.add(beamLine);
+
+  spotData.push({ light, cone, beamLine, basePos, cfg });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  MATERIAL BUILDER
+// ═══════════════════════════════════════════════════════════════════
+
+function buildMat(cfg, mode) {
+  const c   = cfg.hex ?? 0xffffff;
+  const map = cfg.tex ? TEX[cfg.tex] : null;
+  switch (mode) {
+    case 0: return new THREE.MeshLambertMaterial({ color:c, flatShading:true });
+    case 1: return new THREE.MeshLambertMaterial({ color:c, flatShading:false });
+    case 2: return new THREE.MeshPhongMaterial({ color:c, shininess:80 });
+    case 3: return new THREE.MeshPhongMaterial({ color:0xffffff, map, shininess:50 });
+    case 4: return new THREE.MeshBasicMaterial({ color:c, wireframe:true });
+    default: return new THREE.MeshPhongMaterial({ color:c, shininess:80 });
+  }
+}
+
+function buildGeo(type, size) {
+  const r = size * 1.35;
+  switch (type) {
+    case 'sphere':       return new THREE.SphereGeometry(size, 28, 28);
+    case 'tetrahedron':  return new THREE.TetrahedronGeometry(r);
+    case 'octahedron':   return new THREE.OctahedronGeometry(r);
+    case 'cube':         return new THREE.BoxGeometry(size*2, size*2, size*2, 2, 2, 2);
+    case 'icosahedron':  return new THREE.IcosahedronGeometry(r);
+    case 'dodecahedron': return new THREE.DodecahedronGeometry(r);
+    default: return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  OBJECTS
+// ═══════════════════════════════════════════════════════════════════
+
+const objects = [];   // { mesh, cfg, animePos, prevSin, tumble }
+
+for (const cfg of OBJ_CFG) {
+  const animePos = new THREE.Vector3(...cfg.pos);
+  const prevSin  = new THREE.Vector3();
+  if (cfg.type === 'null') {
+    objects.push({ mesh:null, cfg, animePos, prevSin, tumble:0 });
+    continue;
+  }
+  const geo  = buildGeo(cfg.type, cfg.size);
+  const mat  = buildMat(cfg, 2);          // default: Phong
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(animePos);
+  mesh.castShadow    = true;
+  mesh.receiveShadow = true;
+  mesh.visible       = false;
+  worldGroup.add(mesh);
+  objects.push({ mesh, cfg, animePos, prevSin, tumble:0 });
+}
+
+const normalHelpers = new Map();   // mesh → VertexNormalsHelper
+
+// ═══════════════════════════════════════════════════════════════════
+//  GLOW BALL
+// ═══════════════════════════════════════════════════════════════════
+
+const glowMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(GLOW_CFG.size, 32, 32),
+  new THREE.MeshPhongMaterial({ color: GLOW_CFG.hex, emissive:0x001133, shininess:120 })
+);
+glowMesh.visible = false;
+worldGroup.add(glowMesh);
+
+const glowLightDirs = [
+  [1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]
+];
+const glowPLights = [];
+for (let i = 0; i < 6; i++) {
+  const pl = new THREE.PointLight(GLOW_CFG.lightColors[i], 6.0, 80, 0);
+  pl.position.set(...glowLightDirs[i].map(v => v * GLOW_CFG.size * 1.2));
+  glowMesh.add(pl);
+  glowPLights.push(pl);
+}
+
+let glowAnimePos = new THREE.Vector3(...GLOW_CFG.pos);
+let glowPrevSin  = new THREE.Vector3();
+let glowTumble   = 0;
+
+// ═══════════════════════════════════════════════════════════════════
+//  PARTICLE SYSTEM
+// ═══════════════════════════════════════════════════════════════════
+
+const pBallMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(PBALL_CFG.size, 20, 20),
+  new THREE.MeshPhongMaterial({ color: PBALL_CFG.hex, emissive:0x001133 })
+);
+pBallMesh.visible = false;
+worldGroup.add(pBallMesh);
+
+// Lights that travel with the particle ball so the scene isn't pitch-black
+const pBallLight1 = new THREE.PointLight(0xff6622, 5.0, 80, 0);
+pBallLight1.position.set(0, 0, 0);
+pBallMesh.add(pBallLight1);
+const pBallLight2 = new THREE.PointLight(0x2266ff, 3.0, 60, 0);
+pBallLight2.position.set(0, 0, 0);
+pBallMesh.add(pBallLight2);
+
+let pBallAnimePos = new THREE.Vector3(...PBALL_CFG.pos);
+let pBallPrevSin  = new THREE.Vector3();
+
+const MAX_P     = 4000;
+const pPos      = new Float32Array(MAX_P * 3);
+const pVel      = [];
+const pLife     = new Float32Array(MAX_P);
+const pInitLife = new Float32Array(MAX_P);
+
+for (let i = 0; i < MAX_P; i++) {
+  pVel.push(new THREE.Vector3());
+  pLife[i] = 0;
+  pPos[i*3] = 9999; pPos[i*3+1] = 9999; pPos[i*3+2] = 9999;
+}
+
+const pGeo     = new THREE.BufferGeometry();
+const pPosAttr = new THREE.BufferAttribute(pPos, 3);
+pGeo.setAttribute('position', pPosAttr);
+
+const pMat = new THREE.PointsMaterial({
+  color: 0xff8833, size: 0.55, sizeAttenuation: true,
+  map: TEX.P0, alphaTest: 0.02, transparent: true, opacity: 0.9,
+  vertexColors: false,
+});
+const particleSys = new THREE.Points(pGeo, pMat);
+particleSys.visible = false;
+worldGroup.add(particleSys);
+
+let pNextFree = 0;
+
+// 6 emitter directions on sphere surface
+const EMITTER_DIRS = glowLightDirs.map(d => new THREE.Vector3(...d));
+
+function spawnFromEmitter(origin, dir) {
+  const i = pNextFree % MAX_P;
+  pNextFree++;
+  // Spawn on sphere surface
+  const sp = dir.clone().multiplyScalar(PBALL_CFG.size + 0.1);
+  pPos[i*3]   = origin.x + sp.x;
+  pPos[i*3+1] = origin.y + sp.y;
+  pPos[i*3+2] = origin.z + sp.z;
+  // Velocity: outward + random spread
+  const speed  = 0.10 + Math.random() * 0.18;
+  const spread = 0.3;
+  pVel[i].set(
+    dir.x * speed + (Math.random()-0.5)*spread,
+    dir.y * speed + (Math.random()-0.5)*spread,
+    dir.z * speed + (Math.random()-0.5)*spread
+  );
+  const life    = 1.5 + Math.random() * 3.0;
+  pLife[i]      = life;
+  pInitLife[i]  = life;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  BLOOM COMPOSER
+// ═══════════════════════════════════════════════════════════════════
+
+const composer  = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(innerWidth, innerHeight), 0.7, 0.5, 0.8
+);
+bloomPass.enabled = false;
+composer.addPass(bloomPass);
+
+// ═══════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════
+
+let displayMode  = 2;           // 0=flat 1=gouraud 2=phong 3=textured 4=wireframe
+let animType     = 0;           // 0=off 1=sin 2=helix
+let worldSpin    = false;
+let worldRotZ    = 0;           // degrees, rotation around scene-root's Z (vertical)
+let worldRotX    = 0;           // degrees, tilt
+let shadowMode   = 0;
+let fogOn        = false;
+let bloomOn      = false;
+let normalsOn    = false;
+let beamOn       = false;
+let sceneMode    = 'normal';    // 'normal' | 'particle' | 'glow'
+let currentObj   = 0;          // index of highest visible object (start with 1 shown)
+let focusObj     = 0;
+let elapsed      = 0;
+let helixDir     = 1;
+
+// Show first real object
+const _firstObj = objects[1];
+if (_firstObj.mesh) _firstObj.mesh.visible = true;
+currentObj = 1;
+
+// ═══════════════════════════════════════════════════════════════════
+//  ANIMATION HELPERS
+// ═══════════════════════════════════════════════════════════════════
+
+// sin-wave: pos += (sinValue(t) - sinValue(tPrev))  accumulates movement
+function sinStep(anime, t, prev, pos) {
+  if (!anime) return;
+  const cx = anime[0]*Math.sin(anime[1]*t + anime[2]) + anime[3];
+  const cy = anime[4]*Math.sin(anime[5]*t + anime[6]) + anime[7];
+  const cz = anime[8]*Math.sin(anime[9]*t + anime[10]) + anime[11];
+  pos.x += cx - prev.x;
+  pos.y += cy - prev.y;
+  pos.z += cz - prev.z;
+  prev.set(cx, cy, cz);
+}
+
+function helixStep(anime, pos) {
+  if (!anime) return;
+  pos.x = anime[0]*Math.sin(anime[1]*elapsed + anime[2]);
+  pos.y = anime[4]*Math.cos(anime[5]*elapsed) + anime[7];
+  pos.z += 0.012 * helixDir;
+  if (pos.z > BOUNDS)  helixDir = -1;
+  if (pos.z < -BOUNDS) helixDir =  1;
+}
+
+function clamp3(v) {
+  v.x = Math.max(-BOUNDS, Math.min(BOUNDS, v.x));
+  v.y = Math.max(-BOUNDS, Math.min(BOUNDS, v.y));
+  v.z = Math.max(-BOUNDS, Math.min(BOUNDS, v.z));
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  UPDATE OBJECTS
+// ═══════════════════════════════════════════════════════════════════
+
+function updateObjects(dt) {
+  for (let i = 0; i <= currentObj; i++) {
+    const o = objects[i];
+    if (!o.mesh || !o.mesh.visible) continue;
+    if      (animType === 1) { sinStep(o.cfg.anime, elapsed, o.prevSin, o.animePos); clamp3(o.animePos); }
+    else if (animType === 2) { helixStep(o.cfg.anime, o.animePos); }
+    o.mesh.position.copy(o.animePos);
+    if (animType > 0) {
+      o.tumble = (o.tumble + 30*dt) % 360;
+      const r = THREE.MathUtils.degToRad(o.tumble);
+      o.mesh.rotation.set(r * 0.6, r, r * 0.4);
+    }
+    const nh = normalHelpers.get(o.mesh);
+    if (nh) nh.update();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  UPDATE SPOTLIGHTS (point at focus object)
+// ═══════════════════════════════════════════════════════════════════
+
+const _tmpV3 = new THREE.Vector3();
+
+function updateSpotlights() {
+  const target = objects[focusObj]?.animePos ?? new THREE.Vector3(0,0,0);
+  const colorT = elapsed % 8;   // color cycle every 8 s
+
+  for (let i = 0; i < 8; i++) {
+    const sd = spotData[i];
+    if (!lightOn[i]) continue;
+
+    sd.light.target.position.copy(target);
+    sd.light.target.updateMatrixWorld();
+
+    // Rotate small cone at corner to point toward target
+    _tmpV3.subVectors(target, sd.basePos);
+    if (_tmpV3.lengthSq() > 0.001) {
+      const up = Math.abs(_tmpV3.y) < 0.99 ? new THREE.Vector3(0,1,0) : new THREE.Vector3(1,0,0);
+      // cone default points along +Y; we need to orient it from basePos → target
+      sd.cone.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0,1,0),
+        _tmpV3.clone().normalize()
+      );
+    }
+
+    // Update beam endpoint
+    if (beamOn && sd.beamLine.visible) {
+      const pts = sd.beamLine.geometry.attributes.position;
+      pts.setXYZ(1, target.x, target.y, target.z);
+      pts.needsUpdate = true;
+    }
+
+    // Subtle spotlight color shift over time (every ~8 s)
+    if (colorT < 0.05) {
+      const hue = (elapsed * 0.04 + i * 0.125) % 1;
+      sd.light.color.setHSL(hue, 1, 0.6);
+      sd.cone.material.color.setHSL(hue, 1, 0.6);
+      if (beamOn) sd.beamLine.material.color.setHSL(hue, 1, 0.6);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  UPDATE GLOW BALL
+// ═══════════════════════════════════════════════════════════════════
+
+function updateGlowBall(dt) {
+  if (animType === 1) { sinStep(GLOW_CFG.anime, elapsed, glowPrevSin, glowAnimePos); clamp3(glowAnimePos); }
+  else if (animType === 2) { helixStep(GLOW_CFG.anime, glowAnimePos); }
+  glowMesh.position.copy(glowAnimePos);
+  if (animType > 0) {
+    glowTumble = (glowTumble + 25*dt) % 360;
+    glowMesh.rotation.y = THREE.MathUtils.degToRad(glowTumble);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  UPDATE PARTICLES
+// ═══════════════════════════════════════════════════════════════════
+
+function updateParticles(dt) {
+  // Animate the particle ball itself
+  if (animType === 1) { sinStep(PBALL_CFG.anime, elapsed, pBallPrevSin, pBallAnimePos); clamp3(pBallAnimePos); }
+  else if (animType === 2) { helixStep(PBALL_CFG.anime, pBallAnimePos); }
+  pBallMesh.position.copy(pBallAnimePos);
+
+  // Spawn from each of the 6 emitters (rate-limited)
+  for (let e = 0; e < 6; e++) {
+    if (Math.random() < 0.5) {
+      spawnFromEmitter(pBallAnimePos, EMITTER_DIRS[e]);
+    }
+  }
+
+  // Integrate particles
+  for (let i = 0; i < MAX_P; i++) {
+    if (pLife[i] <= 0) continue;
+    pLife[i] -= dt;
+    pPos[i*3]   += pVel[i].x;
+    pPos[i*3+1] += pVel[i].y;
+    pPos[i*3+2] += pVel[i].z;
+    pVel[i].y   -= 0.004;   // gravity
+
+    const dead =
+      pLife[i] <= 0 ||
+      Math.abs(pPos[i*3])   > BOX_SIZE ||
+      Math.abs(pPos[i*3+1]) > BOX_SIZE ||
+      Math.abs(pPos[i*3+2]) > BOX_SIZE;
+
+    if (dead) {
+      pLife[i]      = 0;
+      pPos[i*3]     = 9999;
+      pPos[i*3+1]   = 9999;
+      pPos[i*3+2]   = 9999;
+    }
+  }
+  pPosAttr.needsUpdate = true;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DISPLAY-MODE REFRESH  (rebuild materials)
+// ═══════════════════════════════════════════════════════════════════
+
+function refreshMaterials() {
+  for (let i = 0; i <= currentObj; i++) {
+    const o = objects[i];
+    if (!o.mesh) continue;
+    const old = o.mesh.material;
+    o.mesh.material = buildMat(o.cfg, displayMode);
+    old.dispose();
+  }
+  if (glowMesh.visible) {
+    const old = glowMesh.material;
+    glowMesh.material = buildMat({ hex: GLOW_CFG.hex, tex: null }, displayMode);
+    old.dispose();
+  }
+  if (pBallMesh.visible) {
+    const old = pBallMesh.material;
+    pBallMesh.material = buildMat({ hex: PBALL_CFG.hex, tex: null }, displayMode);
+    old.dispose();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  SCENE SWITCHING  (W key)
+// ═══════════════════════════════════════════════════════════════════
+
+function switchScene() {
+  if (sceneMode === 'normal') {
+    // → particle
+    sceneMode = 'particle';
+    for (const o of objects) if (o.mesh) o.mesh.visible = false;
+    for (const sd of spotData) { sd.light.visible = false; sd.cone.visible = false; sd.beamLine.visible = false; }
+    pBallMesh.visible  = true;
+    particleSys.visible = true;
+    glowMesh.visible   = false;
+
+  } else if (sceneMode === 'particle') {
+    // → glow
+    sceneMode = 'glow';
+    pBallMesh.visible   = false;
+    particleSys.visible = false;
+    glowMesh.visible    = true;
+    for (let i = 0; i <= currentObj; i++) if (objects[i].mesh) objects[i].mesh.visible = true;
+    for (const sd of spotData) { sd.light.visible = false; sd.cone.visible = false; sd.beamLine.visible = false; }
+
+  } else {
+    // → normal
+    sceneMode = 'normal';
+    glowMesh.visible = false;
+    for (let i = 0; i <= currentObj; i++) if (objects[i].mesh) objects[i].mesh.visible = true;
+    for (let i = 0; i < 8; i++) {
+      spotData[i].light.visible   = lightOn[i];
+      spotData[i].cone.visible    = lightOn[i];
+      spotData[i].beamLine.visible = beamOn && lightOn[i];
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  KEYBOARD
+// ═══════════════════════════════════════════════════════════════════
+
+window.addEventListener('keydown', e => {
+  const key = e.key;
+  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(key)) e.preventDefault();
+
+  switch (key) {
+    case 'ArrowLeft':
+      worldRotZ -= 5;
+      worldGroup.rotation.z = THREE.MathUtils.degToRad(worldRotZ);
+      break;
+    case 'ArrowRight':
+      worldRotZ += 5;
+      worldGroup.rotation.z = THREE.MathUtils.degToRad(worldRotZ);
+      break;
+    case 'ArrowUp':
+      worldRotX -= 5;
+      worldGroup.rotation.x = THREE.MathUtils.degToRad(worldRotX);
+      break;
+    case 'ArrowDown':
+      worldRotX += 5;
+      worldGroup.rotation.x = THREE.MathUtils.degToRad(worldRotX);
+      break;
+
+    case 'p': case 'P':
+      worldSpin = !worldSpin;
+      break;
+
+    case 'a': case 'A':
+      animType = (animType + 1) % 3;
+      // Reset prev-sin so objects don't jump on re-enable
+      if (animType === 0) {
+        for (const o of objects) o.prevSin.set(0,0,0);
+        glowPrevSin.set(0,0,0); pBallPrevSin.set(0,0,0);
+      }
+      break;
+
+    case 'm': case 'M':
+      displayMode = (displayMode + 1) % 5;
+      refreshMaterials();
+      break;
+
+    case 'n': case 'N':
+      normalsOn = !normalsOn;
+      if (normalsOn) {
+        for (let i = 0; i <= currentObj; i++) {
+          const o = objects[i];
+          if (!o.mesh || !o.mesh.visible) continue;
+          if (!normalHelpers.has(o.mesh)) {
+            const nh = new VertexNormalsHelper(o.mesh, 0.6, 0x00ff44);
+            scene.add(nh);
+            normalHelpers.set(o.mesh, nh);
+          }
+        }
+      } else {
+        for (const [, nh] of normalHelpers) scene.remove(nh);
+        normalHelpers.clear();
+      }
+      break;
+
+    case 's': case 'S':
+      shadowMode = (shadowMode + 1) % 3;
+      renderer.shadowMap.enabled = shadowMode > 0;
+      break;
+
+    case 'g': case 'G':
+      fogOn = !fogOn;
+      scene.fog = fogOn ? new THREE.FogExp2(0x888888, 0.010) : null;
+      break;
+
+    case 'b': case 'B':
+      bloomOn = !bloomOn;
+      bloomPass.enabled = bloomOn;
+      break;
+
+    case 'k': case 'K':
+      beamOn = !beamOn;
+      if (sceneMode === 'normal') {
+        for (let i = 0; i < 8; i++)
+          spotData[i].beamLine.visible = beamOn && lightOn[i];
+      }
+      break;
+
+    case 'l': case 'L': {
+      const anyOn = lightOn.some(Boolean);
+      for (let i = 0; i < 8; i++) {
+        lightOn[i] = !anyOn;
+        if (sceneMode === 'normal') {
+          spotData[i].light.visible    = lightOn[i];
+          spotData[i].cone.visible     = lightOn[i];
+          spotData[i].beamLine.visible = beamOn && lightOn[i];
+        }
+      }
+      break;
+    }
+
+    case 'w': case 'W':
+      switchScene();
+      break;
+
+    case 'e': case 'E':
+      if (currentObj < objects.length - 1) {
+        currentObj++;
+        const o = objects[currentObj];
+        if (o.mesh) {
+          o.mesh.visible = (sceneMode === 'normal' || sceneMode === 'glow');
+          const old = o.mesh.material;
+          o.mesh.material = buildMat(o.cfg, displayMode);
+          old.dispose();
+        }
+      }
+      break;
+
+    case 'r': case 'R':
+      if (currentObj > 1) {
+        const o = objects[currentObj];
+        if (o.mesh) {
+          o.mesh.visible = false;
+          if (normalHelpers.has(o.mesh)) {
+            scene.remove(normalHelpers.get(o.mesh));
+            normalHelpers.delete(o.mesh);
+          }
+        }
+        if (focusObj >= currentObj) focusObj = Math.max(0, currentObj - 1);
+        currentObj--;
+      }
+      break;
+
+    case 'c': case 'C':
+      focusObj = (focusObj + 1) % (currentObj + 1);
+      break;
+
+    case 'h': case 'H': {
+      const ov = document.getElementById('help-overlay');
+      ov.style.display = ov.style.display === 'block' ? 'none' : 'block';
+      break;
+    }
+
+    default:
+      if (key >= '1' && key <= '8') {
+        const idx = parseInt(key) - 1;
+        lightOn[idx] = !lightOn[idx];
+        if (sceneMode === 'normal') {
+          spotData[idx].light.visible    = lightOn[idx];
+          spotData[idx].cone.visible     = lightOn[idx];
+          spotData[idx].beamLine.visible = beamOn && lightOn[idx];
+        }
+      }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  MOUSE  (left-drag = zoom, right-drag/scroll = rotate camera)
+// ═══════════════════════════════════════════════════════════════════
+
+let cameraZ   = 50, camRotY = 0;
+let mleft = false, mright = false, prevX = 0, prevY = 0;
+
+window.addEventListener('mousedown', e => {
+  if (e.button === 0) mleft  = true;
+  if (e.button === 2) mright = true;
+  prevX = e.clientX; prevY = e.clientY;
+});
+window.addEventListener('mouseup', e => {
+  if (e.button === 0) mleft  = false;
+  if (e.button === 2) mright = false;
+});
+window.addEventListener('mousemove', e => {
+  const dx = e.clientX - prevX, dy = e.clientY - prevY;
+  if (mleft) {
+    cameraZ = Math.max(8, Math.min(95, cameraZ + dy * 0.15));
+    camera.position.z = cameraZ;
+  }
+  if (mright) {
+    camRotY -= dx * 0.4;
+    camera.rotation.y = THREE.MathUtils.degToRad(camRotY);
+  }
+  prevX = e.clientX; prevY = e.clientY;
+});
+window.addEventListener('wheel', e => {
+  cameraZ = Math.max(8, Math.min(95, cameraZ + e.deltaY * 0.06));
+  camera.position.z = cameraZ;
+}, { passive: true });
+window.addEventListener('contextmenu', e => e.preventDefault());
+
+// ═══════════════════════════════════════════════════════════════════
+//  HUD
+// ═══════════════════════════════════════════════════════════════════
+
+const MODE_NAMES  = ['Flat', 'Smooth (Gouraud)', 'Phong GLSL', 'Textured', 'Wireframe'];
+const ANIM_NAMES  = ['Stopped', 'Sin Wave', 'Helix'];
+const SCENE_NAMES = { normal:'Normal', particle:'Particle Ball', glow:'Glow Ball' };
+const SHAD_NAMES  = ['Off', 'Wall', 'Full'];
+const hudEl       = document.getElementById('hud');
+
+function refreshHUD() {
+  hudEl.innerHTML =
+    `Mode: <b>${MODE_NAMES[displayMode]}</b><br>` +
+    `Anim: <b>${ANIM_NAMES[animType]}</b><br>` +
+    `Scene: <b>${SCENE_NAMES[sceneMode]}</b><br>` +
+    `Objects: ${currentObj}/${objects.length-1}<br>` +
+    `Focus: obj ${focusObj}<br>` +
+    `Shadows: ${SHAD_NAMES[shadowMode]}  Fog: ${fogOn?'ON':'off'}  Bloom: ${bloomOn?'ON':'off'}<br>` +
+    `Spin: ${worldSpin?'ON':'off'}<br>` +
+    `<span style="color:#adf">H</span> for help`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  RESIZE
+// ═══════════════════════════════════════════════════════════════════
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  MAIN LOOP
+// ═══════════════════════════════════════════════════════════════════
+
+let lastT = performance.now() * 0.001;
+
+function tick() {
+  requestAnimationFrame(tick);
+  const now = performance.now() * 0.001;
+  const dt  = Math.min(now - lastT, 0.05);
+  lastT = now;
+  elapsed += dt;
+
+  // World auto-spin around the vertical (local Z after sceneRoot tilt)
+  if (worldSpin) {
+    worldRotZ += WORLD_VEL * dt * 10;    // ~30°/s; full rotation every ~12 s
+    worldGroup.rotation.z = THREE.MathUtils.degToRad(worldRotZ);
+  }
+
+  // Per-scene updates
+  if (sceneMode === 'particle') {
+    updateParticles(dt);
+  } else {
+    updateObjects(dt);
+    if (sceneMode === 'glow')   updateGlowBall(dt);
+    if (sceneMode === 'normal') updateSpotlights();
+  }
+
+  if (bloomOn) composer.render();
+  else         renderer.render(scene, camera);
+
+  refreshHUD();
+}
+
+tick();
+</script>
+</body>
+</html>

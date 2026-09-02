@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Little Playground</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #06080f;
+      color: #cde;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Grid background ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(60, 120, 200, .08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(60, 120, 200, .08) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Header ── */
+    header {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 64px 24px 40px;
+    }
+
+    header h1 {
+      font-size: clamp(2rem, 5vw, 3.4rem);
+      font-weight: 700;
+      letter-spacing: .04em;
+      color: #fff;
+      text-shadow: 0 0 40px rgba(80, 160, 255, .5);
+    }
+
+    header p {
+      margin-top: 12px;
+      font-size: 1rem;
+      color: #89a;
+      letter-spacing: .02em;
+    }
+
+    /* ── Cards grid ── */
+    main {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 28px 80px;
+    }
+
+    /* ── Single card ── */
+    .card {
+      display: flex;
+      flex-direction: column;
+      background: rgba(12, 18, 35, 0.75);
+      border: 1px solid rgba(80, 140, 220, 0.18);
+      border-radius: 14px;
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+      transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      border-color: rgba(80, 180, 255, 0.55);
+      box-shadow: 0 12px 40px rgba(40, 100, 220, 0.22);
+    }
+
+    .card.disabled {
+      opacity: .45;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    .card-thumb {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3.2rem;
+      background: rgba(8, 12, 28, 0.9);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Subtle animated glow behind the icon */
+    .card-thumb::after {
+      content: '';
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: var(--glow, rgba(80, 140, 255, .12));
+      filter: blur(30px);
+      animation: pulse 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: .6;
+        transform: scale(.9);
+      }
+
+      50% {
+        opacity: 1;
+        transform: scale(1.15);
+      }
+    }
+
+    .card-body {
+      padding: 18px 20px 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #e8f0ff;
+      letter-spacing: .02em;
+    }
+
+    .card-desc {
+      font-size: .85rem;
+      color: #778;
+      line-height: 1.55;
+      flex: 1;
+    }
+
+    .card-tag {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: .72rem;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 4px;
+      background: rgba(80, 140, 220, .14);
+      color: #7af;
+      border: 1px solid rgba(80, 140, 220, .25);
+    }
+
+    .card-tag.soon {
+      background: rgba(120, 80, 20, .14);
+      color: #fa8;
+      border-color: rgba(180, 120, 40, .25);
+    }
+
+    /* ── Section heading ── */
+    .section-heading {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 0 4px;
+    }
+
+    .section-heading:not(:first-child) {
+      margin-top: 24px;
+    }
+
+    .section-heading h2 {
+      font-size: .72rem;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #556;
+      white-space: nowrap;
+    }
+
+    .section-heading::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(80, 140, 220, .15);
+    }
+
+    /* ── Section intro ── */
+    .section-intro {
+      grid-column: 1 / -1;
+      font-size: .9rem;
+      color: #7a8fa8;
+      line-height: 1.7;
+      max-width: 72ch;
+    }
+
+    /* ── Footer ── */
+    footer {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 0 0 32px;
+      font-size: .78rem;
+      color: #445;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <h1>My Little Playground</h1>
+  </header>
+
+  <main>
+
+    <!-- ─── About Me ─── -->
+    <a class="card" href="about.html">
+      <div class="card-thumb" style="--glow: rgba(80,200,160,.2); padding: 0">
+        <img src="me.png" alt="Me" style="width:100%;height:100%;object-fit:contain;position:relative;z-index:1">
+      </div>
+      <div class="card-body">
+        <div class="card-title">About Me</div>
+        <div class="card-desc">Games programmer and lifelong tinkerer.</div>
+        <span class="card-tag">Who I am</span>
+      </div>
+    </a>
+
+    <div class="section-heading">
+      <h2>MSc Computer Science for Games Programming 2009/10 ACW</h2>
+    </div>
+    <p class="section-intro">Practical and research-driven projects covering real-time graphics, simulation, AI, and
+      multi-platform game development.</p>
+
+    <!-- ─── Dissertation ─── -->
+    <a class="card" href="acw/dissertation/">
+      <div class="card-thumb" style="--glow: rgba(160,80,240,.2)">📝</div>
+      <div class="card-body">
+        <div class="card-title">Dissertation</div>
+        <div class="card-desc">Dissertation project demo.</div>
+        <span class="card-tag">C++ · DirectX9 · Win32</span>
+      </div>
+    </a>
+
+    <!-- ─── 3D OpenGL Simulation ─── -->
+    <a class="card" href="acw/simulation/">
+      <div class="card-thumb" style="--glow: rgba(80,60,220,.2)">📦</div>
+      <div class="card-body">
+        <div class="card-title">3D Box Simulation</div>
+        <div class="card-desc">
+          Real-time 3D scene inside a transparent box — animated platonic solids,
+          8 corner spotlights, glow ball, particle emitters, multiple shading modes.
+        </div>
+        <span class="card-tag">C++ · OpenGL · Win32</span>
+      </div>
+    </a>
+
+    <!-- ─── Ripoff full game ─── -->
+    <a class="card" href="acw/ripoff/">
+      <div class="card-thumb" style="--glow: rgba(200,80,200,.15)">💎</div>
+      <div class="card-body">
+        <div class="card-title">Ripoff</div>
+        <div class="card-desc">
+          Guard your diamonds against waves of AI thief ships.
+          Full top-down space shooter with physics, collision, and AI behaviour.
+        </div>
+        <span class="card-tag">C++ · OpenGL · PSP</span>
+      </div>
+    </a>
+
+    <!-- ─── Flocking ─── -->
+    <a class="card" href="acw/flocking/">
+      <div class="card-thumb" style="--glow: rgba(40,180,160,.2)">🐦</div>
+      <div class="card-body">
+        <div class="card-title">Flocking</div>
+        <div class="card-desc">Flocking simulation — AI research supporting the Ripoff project.</div>
+        <span class="card-tag">C++ · OpenGL · Win32</span>
+      </div>
+    </a>
+
+    <!-- ─── Advanced Rendering ACW ─── -->
+    <a class="card" href="acw/rendering/">
+      <div class="card-thumb" style="--glow: rgba(200,120,40,.2)">🫖</div>
+      <div class="card-body">
+        <div class="card-title">TeapotWar (Port in progress)</div>
+        <div class="card-desc">
+          Real-time 3D battle scene — 20+ deformed teapot characters, bump-mapped
+          terrain, animated water, cubemap sky, fire &amp; smoke effects.
+        </div>
+        <span class="card-tag">RenderMonkey · HLSL</span>
+      </div>
+    </a>
+
+    <div class="section-heading">
+      <h2>Tutorials</h2>
+    </div>
+    <p class="section-intro">Step-by-step demos I made as a lecturer — covering game programming, interactive graphics,
+      and software development from first principles.</p>
+
+    <!-- ─── Shooter Tutorial ─── -->
+    <a class="card" href="tutorials/shooter/index.html">
+      <div class="card-thumb" style="--glow: rgba(40,200,120,.15)">🎯</div>
+      <div class="card-body">
+        <div class="card-title">Shooter Tutorial</div>
+        <div class="card-desc">
+          Incremental Canvas 2D demos — ship movement, shooting patterns,
+          charged shots, scrolling, turrets, and asteroid survival.
+        </div>
+        <span class="card-tag">Canvas 2D · JavaScript</span>
+      </div>
+    </a>
+
+    <!-- ─── OpenGL Tutorial ─── -->
+    <a class="card" href="tutorials/opengl/index.html">
+      <div class="card-thumb" style="--glow: rgba(80,160,255,.18)">🔺</div>
+      <div class="card-body">
+        <div class="card-title">OpenGL Tutorial</div>
+        <div class="card-desc">
+          Interactive OpenGL demos — port of a Windows OpenGL 2.0 tutorial series.
+        </div>
+        <span class="card-tag">C++ · OpenGL · Win32</span>
+      </div>
+    </a>
+
+    <!-- ─── Physics Tutorial ─── -->
+    <a class="card" href="tutorials/physics/index.html">
+      <div class="card-thumb" style="--glow: rgba(80,200,255,.15)">⚛️</div>
+      <div class="card-body">
+        <div class="card-title">Physics Tutorial</div>
+        <div class="card-desc">
+          Step-by-step physics demos — forces, collisions, constraints, and
+          rigid-body dynamics built up incrementally.
+        </div>
+        <span class="card-tag">C++ · DirectX · Win32</span>
+      </div>
+    </a>
+
+    <div class="section-heading">
+      <h2>Fun</h2>
+    </div>
+    <p class="section-intro">Experiments and toys — built for the joy of it.</p>
+
+    <!-- ─── Alchemy ─── -->
+    <a class="card" href="fun/alchemy/">
+      <div class="card-thumb" style="--glow: rgba(80,200,120,.2)">⚗️</div>
+      <div class="card-body">
+        <div class="card-title">Alchemy</div>
+        <div class="card-desc">Combine water, fire, earth, air, and sun — a cellular automaton of elemental reactions.
+        </div>
+        <span class="card-tag">Canvas 2D · JavaScript</span>
+      </div>
+    </a>
+
+    <!-- ─── Particle Simulation ─── -->
+    <a class="card" href="fun/particle/">
+      <div class="card-thumb" style="--glow: rgba(255,160,60,.2)">✨</div>
+      <div class="card-body">
+        <div class="card-title">Particle Simulation</div>
+        <div class="card-desc">Interactive particle system — play with spatial, emitters, and force.</div>
+        <span class="card-tag">C++ · OpenGL · Win32</span>
+      </div>
+    </a>
+
+  </main>
+
+  <footer>© 2026 Waterpine Studio. All rights reserved.</footer>
+
+</body>
+
+</html>

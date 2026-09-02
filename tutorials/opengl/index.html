@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenGL 2.0 Tutorial</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #06080f;
+      color: #cde;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(60, 120, 200, .06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(60, 120, 200, .06) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 40px 24px 24px;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 0 30px rgba(80, 160, 255, .5);
+    }
+
+    header p {
+      margin-top: 8px;
+      font-size: .9rem;
+      color: #89a;
+    }
+
+    #back {
+      position: fixed;
+      top: 12px;
+      left: 14px;
+      color: #adf;
+      font: 11px/1 monospace;
+      text-decoration: none;
+      opacity: 0.7;
+      transition: opacity .2s;
+      z-index: 10;
+    }
+
+    #back:hover {
+      opacity: 1;
+    }
+
+    main {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px 60px;
+    }
+
+    .section-title {
+      font-size: .7rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #556;
+      margin: 32px 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(80, 140, 220, .12);
+    }
+
+    .demos {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .demo-card {
+      background: rgba(12, 18, 35, 0.75);
+      border: 1px solid rgba(80, 140, 220, .15);
+      border-radius: 10px;
+      overflow: hidden;
+      backdrop-filter: blur(4px);
+    }
+
+    .demo-label {
+      display: block;
+      font-size: .72rem;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: #7af;
+      text-decoration: none;
+      padding: 8px 12px 6px;
+    }
+
+    .demo-card canvas {
+      display: block;
+      width: 100%;
+      height: 220px;
+      background: #000;
+      cursor: crosshair;
+    }
+
+    .demo-card canvas:focus {
+      outline: 1px solid rgba(80, 160, 255, .4);
+    }
+
+    .controls {
+      padding: 6px 12px 10px;
+      font-size: .68rem;
+      color: #445;
+    }
+  </style>
+</head>
+
+<body>
+
+  <a id="back" href="../../">← back</a>
+
+  <header>
+    <h1>OpenGL 2.0 Tutorial</h1>
+    <p>Legacy OpenGL ported to WebGL</p>
+  </header>
+
+  <main>
+
+    <div class="section-title">Primitives</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Triangle">01 &mdash; Triangle</a>
+        <canvas tabindex="0" id="cvsTriangle" width="320" height="220"></canvas>
+        <div class="controls">Static</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=VertexArray">10 &mdash; Vertex Array</a>
+        <canvas tabindex="0" id="cvsVertexArray" width="320" height="220"></canvas>
+        <div class="controls">Vertex colours via VBO</div>
+      </div>
+
+    </div>
+
+    <div class="section-title">Transformation</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Transformation">02 &mdash; Transformation</a>
+        <canvas tabindex="0" id="cvsTransformation" width="320" height="220"></canvas>
+        <div class="controls">← → ↑ ↓ translate &nbsp;·&nbsp; A / S rotate</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Projection">03 &mdash; Projection</a>
+        <canvas tabindex="0" id="cvsProjection" width="320" height="220"></canvas>
+        <div class="controls">← → ↑ ↓ translate &nbsp;·&nbsp; PgUp / PgDn Z &nbsp;·&nbsp; A / S rotate</div>
+      </div>
+
+    </div>
+
+    <div class="section-title">3D Geometry</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Cube">04 &mdash; Cube</a>
+        <canvas tabindex="0" id="cvsCube" width="320" height="220"></canvas>
+        <div class="controls">← → ↑ ↓ PgUp/PgDn translate &nbsp;·&nbsp; A / D / W / S rotate</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Quadric">05 &mdash; Quadric</a>
+        <canvas tabindex="0" id="cvsQuadric" width="320" height="220"></canvas>
+        <div class="controls">T = shape &nbsp;·&nbsp; M = wireframe &nbsp;·&nbsp; A / D / W / S rotate</div>
+      </div>
+
+    </div>
+
+    <div class="section-title">Lighting</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Lighting">06 &mdash; Lighting</a>
+        <canvas tabindex="0" id="cvsLighting" width="320" height="220"></canvas>
+        <div class="controls">T = shape &nbsp;·&nbsp; N = normals &nbsp;·&nbsp; IJKL/UO light &nbsp;·&nbsp; WASD rotate
+        </div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=LightingAdv">06 &mdash; Lighting Advanced</a>
+        <canvas tabindex="0" id="cvsLightingAdv" width="320" height="220"></canvas>
+        <div class="controls">Spotlight + ambient &nbsp;·&nbsp; WASD rotate &nbsp;·&nbsp; , / . cutoff</div>
+      </div>
+
+    </div>
+
+    <div class="section-title">Texture</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Texture">07 &mdash; Texture</a>
+        <canvas tabindex="0" id="cvsTexture" width="320" height="220"></canvas>
+        <div class="controls">Textured quad (procedural)</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=TextureBlend">07 &mdash; Texture Blend</a>
+        <canvas tabindex="0" id="cvsTextureBlend" width="320" height="220"></canvas>
+        <div class="controls">B = blend &nbsp;·&nbsp; T = shape &nbsp;·&nbsp; WASD rotate</div>
+      </div>
+
+    </div>
+
+    <div class="section-title">Shadow</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Shadow">08 &mdash; Shadow</a>
+        <canvas tabindex="0" id="cvsShadow" width="320" height="220"></canvas>
+        <div class="controls">← → move light &nbsp;·&nbsp; S = stencil</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=ShadowAdv">08 &mdash; Shadow Advanced</a>
+        <canvas tabindex="0" id="cvsShadowAdv" width="320" height="220"></canvas>
+        <div class="controls">← → rotate sphere in box</div>
+      </div>
+
+    </div>
+
+    <div class="section-title">Font</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Font">09 &mdash; Font</a>
+        <canvas tabindex="0" id="cvsFont" width="320" height="220"></canvas>
+        <div class="controls">Canvas 2D text overlay on WebGL scene</div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script src="js/common.js"></script>
+  <script src="js/Triangle.js"></script>
+  <script src="js/VertexArray.js"></script>
+  <script src="js/Transformation.js"></script>
+  <script src="js/Projection.js"></script>
+  <script src="js/Cube.js"></script>
+  <script src="js/Quadric.js"></script>
+  <script src="js/Lighting.js"></script>
+  <script src="js/LightingAdv.js"></script>
+  <script src="js/Texture.js"></script>
+  <script src="js/TextureBlend.js"></script>
+  <script src="js/Shadow.js"></script>
+  <script src="js/ShadowAdv.js"></script>
+  <script src="js/Font.js"></script>
+
+</body>
+
+</html>

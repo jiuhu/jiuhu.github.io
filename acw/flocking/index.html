@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI and Flocking Controller — Rip Off Game</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #06080f;
+      color: #cde;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      line-height: 1.7;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(60,120,200,.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(60,120,200,.05) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #back {
+      position: fixed; top: 12px; left: 14px;
+      color: #adf; font: 11px/1 monospace;
+      text-decoration: none; opacity: 0.6;
+      transition: opacity .2s; z-index: 10;
+    }
+    #back:hover { opacity: 1; }
+
+    /* ── Report ─────────────────────────────────────────────────────────── */
+
+    .report {
+      position: relative; z-index: 1;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 72px 28px 0;
+    }
+
+    .report h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 0 40px rgba(80,160,255,.4);
+      letter-spacing: .02em;
+      line-height: 1.25;
+    }
+
+    .report .subtitle {
+      margin-top: 8px;
+      font-size: .85rem;
+      color: #7af;
+      letter-spacing: .04em;
+      font-family: monospace;
+    }
+
+    .report .meta {
+      margin-top: 12px;
+      font-size: .78rem;
+      color: #445;
+      border-bottom: 1px solid rgba(80,140,220,.15);
+      padding-bottom: 24px;
+    }
+
+    .report h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #a8d4ff;
+      margin-top: 44px;
+      margin-bottom: 10px;
+      letter-spacing: .03em;
+    }
+    .report h2::before {
+      content: '## ';
+      color: #334;
+      font-family: monospace;
+    }
+
+    .report h3 {
+      font-size: .95rem;
+      font-weight: 600;
+      color: #7af;
+      margin-top: 28px;
+      margin-bottom: 8px;
+    }
+    .report h3::before {
+      content: '### ';
+      color: #334;
+      font-family: monospace;
+    }
+
+    .report p {
+      font-size: .9rem;
+      color: #aab;
+      margin-bottom: 12px;
+    }
+
+    .report ul {
+      list-style: none;
+      padding-left: 0;
+      margin-bottom: 12px;
+    }
+    .report ul li {
+      font-size: .88rem;
+      color: #aab;
+      padding: 3px 0 3px 20px;
+      position: relative;
+    }
+    .report ul li::before {
+      content: '─';
+      position: absolute;
+      left: 0;
+      color: #334;
+      font-family: monospace;
+    }
+
+    .report code {
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: .82em;
+      background: rgba(40,80,160,.18);
+      border: 1px solid rgba(80,140,220,.15);
+      border-radius: 3px;
+      padding: 1px 5px;
+      color: #9cf;
+    }
+
+    .report pre {
+      background: rgba(0,4,12,.7);
+      border: 1px solid rgba(80,140,220,.15);
+      border-left: 3px solid rgba(80,160,255,.4);
+      border-radius: 6px;
+      padding: 16px 18px;
+      overflow-x: auto;
+      margin: 12px 0 20px;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: .8rem;
+      line-height: 1.6;
+      color: #8bc;
+    }
+
+    /* syntax highlight helpers */
+    .report pre .kw  { color: #7af; }   /* keyword */
+    .report pre .ty  { color: #adf; }   /* type */
+    .report pre .fn  { color: #cef; }   /* function */
+    .report pre .cm  { color: #334; font-style: italic; }  /* comment */
+    .report pre .str { color: #9d8; }   /* string */
+    .report pre .num { color: #fca; }   /* number */
+    .report pre .pp  { color: #a8f; }   /* preprocessor */
+
+    .state-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .8rem;
+      margin: 12px 0 20px;
+    }
+    .state-table th {
+      text-align: left;
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #7af;
+      padding: 6px 10px;
+      border-bottom: 1px solid rgba(80,140,220,.2);
+    }
+    .state-table td {
+      padding: 6px 10px;
+      color: #899;
+      border-bottom: 1px solid rgba(80,140,220,.06);
+      vertical-align: top;
+    }
+    .state-table td:first-child {
+      font-family: monospace;
+      font-size: .78rem;
+      color: #7af;
+      white-space: nowrap;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .8rem;
+      margin: 12px 0 20px;
+    }
+    .data-table th {
+      text-align: left;
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #7af;
+      padding: 6px 10px;
+      border-bottom: 1px solid rgba(80,140,220,.2);
+    }
+    .data-table td {
+      padding: 6px 10px;
+      color: #899;
+      border-bottom: 1px solid rgba(80,140,220,.06);
+    }
+
+    .caption {
+      font-size: .72rem;
+      font-style: italic;
+      color: #445;
+      margin: -14px 0 20px;
+      text-align: center;
+    }
+
+    .heuristic-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .8rem;
+      margin: 12px 0 8px;
+    }
+    .heuristic-table th {
+      background: rgba(80,140,220,.08);
+      color: #7af;
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      padding: 6px 12px;
+      border: 1px solid rgba(80,140,220,.15);
+      text-align: center;
+    }
+    .heuristic-table td {
+      padding: 6px 12px;
+      color: #899;
+      border: 1px solid rgba(80,140,220,.08);
+      text-align: center;
+    }
+    .heuristic-table td:first-child { text-align: left; color: #7af; font-family: monospace; font-size: .78rem; }
+
+    /* ── Game viewport ──────────────────────────────────────────────────── */
+
+    .game-section {
+      position: relative; z-index: 1;
+      max-width: 1000px;
+      margin: 56px auto 0;
+      padding: 0 28px 80px;
+    }
+    .game-section-title {
+      font-size: .7rem;
+      font-weight: 600;
+      color: #a8d4ff;
+      margin-bottom: 14px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .game-hint {
+      font-size: .72rem;
+      color: #445;
+      font-family: monospace;
+      margin-bottom: 10px;
+    }
+    #game-wrap {
+      position: relative;
+      width: 100%;
+      height: 520px;
+      border: 1px solid rgba(80,140,220,.2);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
+    }
+    #CanvasPrototype {
+      position: absolute;
+      top: 0; left: 0;
+      display: block;
+      cursor: crosshair;
+    }
+    .game-overlay-label {
+      position: absolute;
+      bottom: 10px; right: 12px;
+      font-size: .65rem;
+      font-family: monospace;
+      color: rgba(80,140,220,.3);
+      pointer-events: none;
+      z-index: 2;
+    }
+  </style>
+</head>
+<body>
+
+<a id="back" href="../../">← back</a>
+
+<!-- ── Report ────────────────────────────────────────────────────────────── -->
+<article class="report">
+
+  <h1>AI and Flocking Controller<br>for the Rip Off Game</h1>
+  <div class="subtitle">08968 ACW Report</div>
+  <div class="meta">MSc Games Programming &nbsp;·&nbsp; AI Module</div>
+
+  <!-- ─ 1 ─────────────────────────────────────────────────────────────── -->
+  <h2>1. Introduction</h2>
+  <p>
+    The following document is the 08968 AI ACW report for the AI and Flocking Controller for the Rip Off Game.
+    There are four sections included in this report. The second section, entitled
+    <em>Analysis of AI Requirements for the Game</em>, will describe the types of AI required by the game to
+    create a complete game play. The next section, <em>Design of AI Control Strategy for the Game</em>, will
+    discuss the works of designing the AI and the techniques applied, and how the goal is achieved.
+    The <em>Implementation and Testing</em> section then explains how the testing progressed, including problems
+    faced and how they were resolved. The <em>Analysis of Results</em> section will record the various results
+    tested with the various AI controllers implemented, and contains ideas about how each controller can be
+    improved. A <em>Conclusion</em> reflects on what has been achieved.
+  </p>
+
+  <!-- ─ 2 ─────────────────────────────────────────────────────────────── -->
+  <h2>2. Analysis of AI Requirements for the Game</h2>
+  <p>
+    Rip-Off is an arcade game where the goal of the players is to protect the fuel canisters (cargo) seated in
+    the centre of the screen from groups of invading Alien Craft that appear from the edges of the battlefield.
+    The AI controller for the alien craft is aimed to rip off all the cargo protected by the player, as well as
+    eliminate the player's craft which is on their way.
+  </p>
+  <p>
+    Basically, the behaviours for the alien crafts flow as follows: first navigating around the battlefield,
+    then eventually finding the cargo or the player's craft. If they find the cargo, they navigate towards it
+    and try to collect it — the alien craft needs to take a 180° turn to hook the cargo with the hooking device
+    at the back of the craft. After successfully hooking the cargo, the alien craft tries to run away. If they
+    meet the player's craft, they enter a battle state to shoot it. The result is either the alien craft shoots
+    down the player and continues the cargo search, or the alien craft is eliminated by the player.
+  </p>
+  <p>
+    In order to determine what makes a successful AI controller, time was spent observing how the single-player
+    mode was played. From that, ideas were built around different strategies players employ against the alien
+    crafts. Most players prefer to guard the centre; some enjoy hit-and-run tactics. Introducing different alien
+    craft AI controller spawning algorithms based on selected difficulty addresses the challenge of new players
+    not being familiar with the craft's control scheme.
+  </p>
+
+  <h3>2.1 Requirements for AI Controller</h3>
+  <p>
+    For the single NPC AI controller, the aim is to create a controller that will be able to play a complete
+    game with the player and produce a sensible result. Each controller will have its own goal and make its own
+    decisions.
+  </p>
+  <ul>
+    <li>A <strong>Thief</strong> type focuses only on retrieving cargo and will not attack the player. This type acts
+      kamikaze-style — straight-diving into the centre, hooking cargo, and retreating. It will not consider
+      attacking the player's craft even when nearby. Suitable for early waves to give the player time to get
+      familiar with the environment.</li>
+    <li>A <strong>Fighter</strong> type first focuses on attacking the player. After shooting down the player, it heads
+      for the cargo. In difficult mode it will turn back to attack the player again if the re-spawned craft is
+      close.</li>
+    <li>Both types used together within a single wave create a more challenging gameplay — some crafts attack
+      the player while others aim for the cargo.</li>
+    <li>A simple separation algorithm should be added to avoid craft collisions. Crafts should maintain a
+      certain distance from neighbours, avoiding two crafts being shot down by a single bullet and improving
+      realism.</li>
+  </ul>
+
+  <h3>2.2 Requirements for Flocking Controller</h3>
+  <p>
+    For the flocking NPC AI controller, the aim is to create a group of AI controllers acting together. The
+    navigation behaviours of the alien crafts now take into consideration all the alien crafts appearing in a
+    wave. The flocking AI controller will have three new behaviours added to the architecture:
+    <strong>cohesion</strong>, <strong>separation</strong>, and <strong>alignment</strong>.
+  </p>
+  <ul>
+    <li><strong>Separation</strong> — each alien craft considers every other craft during the wave instead of only
+      colliding pairs.</li>
+    <li><strong>Alignment</strong> — ensures that all alien crafts keep the same rotation angle for navigation.</li>
+    <li><strong>Cohesion</strong> — produces the steering force to move alien crafts toward the centre of mass of
+      the group.</li>
+  </ul>
+
+  <!-- ─ 3 ─────────────────────────────────────────────────────────────── -->
+  <h2>3. Design of AI Control Strategy for the Game</h2>
+  <p>
+    The aim of the AI control strategy is to create the AI controller based on the analysis of the requirements.
+    The <strong>finite state machine (FSM)</strong> approach is applied as the fundamental design. The state machine
+    is designed as a set of functions; the AI Controller class holds a pointer to a member function,
+    <code>m_stateFunction</code>, that points to the current state. During the update process it directs the
+    controller to the corresponding state function.
+  </p>
+
+<pre><span class="cm">// State function pointer in EweGameAiController</span>
+<span class="kw">typedef</span> <span class="kw">void</span> (<span class="ty">EweGameAiController</span>::*<span class="ty">StateFunc</span>)();
+<span class="ty">StateFunc</span> m_stateFunction;
+
+<span class="cm">// Setting initial state on spawn</span>
+m_stateFunction = &amp;<span class="ty">EweGameAiController</span>::<span class="fn">stateNavigate</span>;</pre>
+
+  <p>
+    Heuristics functions apply weighting to an alien craft's behaviours. Retrieving cargo earns more points
+    than shooting down a player's craft. The distance between the craft and its target also affects motivation.
+    For example, if the alien craft is much nearer to the player's craft, it will choose to attack even though
+    cargo is worth more points.
+  </p>
+
+  <table class="heuristic-table">
+    <tr><th>Target</th><th>Player's Craft</th><th>Cargo</th></tr>
+    <tr><td>Points allocated</td><td>50</td><td>100</td></tr>
+    <tr><td>Distance to</td><td>20</td><td>50</td></tr>
+    <tr><td>Motivation</td><td>50 / 20 = 2.5</td><td>100 / 50 = 2.0</td></tr>
+  </table>
+  <div class="caption">Table 3.1: Sample heuristics — craft attacks player (motivation 2.5 &gt; 2.0)</div>
+
+  <h3>3.1 Design for AI Controller</h3>
+  <p>
+    Two types of alien craft behaviours were created: the <strong>Thief</strong>, which only focuses on stealing
+    cargo, and the <strong>Fighter</strong>, which first targets the player's craft. After defeating the player,
+    the Fighter then seeks cargo.
+  </p>
+  <p>
+    When alien crafts are spawned, the game engine generates the controller type based on a craft generator
+    factor influenced by the game difficulty:
+  </p>
+
+<pre><span class="cm">// Type generation on spawn</span>
+<span class="ty">int</span> factor = (rand() % (NUM_ALIENCRAFT + <span class="num">1</span>)) + m_difficulty;
+m_AIType = factor % NUM_ALIENCRAFT;</pre>
+
+  <p>
+    After a Thief spawns, it looks for the nearest available cargo. A targeted cargo is marked so that no two
+    crafts fight for the same one:
+  </p>
+
+<pre><span class="ty">Cargo</span>* <span class="ty">EweGameAiController</span>::<span class="fn">findNearestCargo</span>() {
+    <span class="kw">if</span> (m_cargoList.size() &lt;= <span class="num">0</span>) <span class="kw">return</span> <span class="kw">nullptr</span>;
+
+    <span class="cm">// Initialise with the first cargo</span>
+    <span class="ty">Cargo</span>* nearest = m_cargoList.front();
+    <span class="ty">float</span> minLen = (m_position - nearest-&gt;<span class="fn">getPosition</span>()).<span class="fn">Length</span>();
+
+    <span class="kw">for</span> (<span class="ty">Cargo</span>* cargo : m_cargoList) {
+        <span class="ty">float</span> tmp = (m_position - cargo-&gt;<span class="fn">getPosition</span>()).<span class="fn">Length</span>();
+        <span class="kw">if</span> (tmp &lt; minLen) {
+            minLen = tmp;
+            nearest = cargo;
+        }
+    }
+    <span class="kw">return</span> nearest;
+}</pre>
+
+  <p>
+    When a Thief arrives at the cargo position it aligns its back to the cargo to allow hooking. It then
+    determines a retreat point: if it is near the top of the screen, it retreats upward; similarly for the
+    bottom. The Fighter uses the same nearest-entity search for the player's craft and chases the player until
+    it either shoots the player down or is itself eliminated.
+  </p>
+  <p>
+    When both Thief and Fighter are on the battlefield simultaneously, the Fighter covers the Thief by engaging
+    the player, giving the Thief time to retrieve cargo. The player must choose between attacking the Fighter
+    first (risking cargo loss) or the Thief first (risking being shot by the Fighter).
+  </p>
+
+  <h3>3.2 Design for Flocking Controller</h3>
+  <p>
+    One alien craft is selected as the <strong>leader</strong>; the rest become <strong>followers</strong>.
+    The leader carries out the task of finding cargo or the player's craft. The followers follow the leader's
+    movement using the three boid rules. The leader does not hook cargo directly — it issues a command to all
+    followers to hook the cargo, then leads the group to the retreat point.
+  </p>
+  <p>
+    During the spawn phase, after all alien crafts have spawned and controllers have been set up,
+    <code>selectLeader()</code> is called. The leader is assigned a distinct graphical layout (red colour) and
+    its state is set to <code>stateLeader</code>.
+  </p>
+  <p>
+    The flocking controller relies on blending the three behaviours:
+  </p>
+  <ul>
+    <li><strong>Cohesion</strong> — guides followers toward the leader's position. Implementation is simple:
+      return the leader's world position as the target.</li>
+    <li><strong>Separation</strong> — helps craft navigate slightly apart from other craft that are too close.
+      The force applied is calculated as follows:</li>
+  </ul>
+
+<pre><span class="ty">Vector2</span> <span class="ty">EweFlockingAiController</span>::<span class="fn">separation</span>() {
+    <span class="ty">Vector2</span> steeringForce(<span class="num">0.0f</span>, <span class="num">0.0f</span>);
+
+    <span class="kw">for</span> (<span class="ty">AlienCraft</span>* craft : m_group) {
+        <span class="kw">if</span> (craft == m_ship) <span class="kw">continue</span>;
+
+        <span class="ty">Vector2</span> distance = m_position - craft-&gt;<span class="fn">getPosition</span>();
+        <span class="ty">float</span> len = distance.<span class="fn">Length</span>();
+
+        <span class="kw">if</span> (len &gt; <span class="num">0.0f</span> &amp;&amp; len &lt;= m_separationRadius) {
+            distance.<span class="fn">Normalize</span>();
+            steeringForce += distance * ((m_separationRadius - len) / m_separationRadius);
+        }
+    }
+    <span class="kw">return</span> steeringForce;
+}</pre>
+
+  <ul>
+    <li><strong>Alignment</strong> — the rotation angle of the followers is aligned to the leader. Returns the
+      leader's current rotation angle.</li>
+  </ul>
+  <p>
+    If the leader is shot down by the player's craft, <code>selectLeader()</code> is called again to pick a new
+    leader from the remaining followers. The remaining followers then cohese toward the new leader.
+  </p>
+
+  <!-- ─ 4 ─────────────────────────────────────────────────────────────── -->
+  <h2>4. Implementation and Testing of AI Controllers</h2>
+  <p>
+    The individual AI controller is the fundamental part of the game AI. Most of the design and implementation
+    code is reused for the flocking AI controller.
+  </p>
+  <p>
+    Three test cases were used throughout testing:
+  </p>
+  <ul>
+    <li>Player's craft stationary — observe how alien crafts play the game unimpeded.</li>
+    <li>Player's craft navigating — observe how alien crafts respond and how the game engine reacts to
+      craft being shot down.</li>
+    <li>Full game — observe AI performance in an actual game.</li>
+  </ul>
+
+  <h3>4.1 Implementation and Testing for AI Controller</h3>
+  <p>
+    For the single NPC AI controller, implementation is straightforward. Every alien craft that spawns has its
+    own independent controller. Updates to one controller do not affect others; each maintains its own state,
+    navigation path, and target entity.
+  </p>
+  <p>
+    The Thief was tested first with only Thieves on the battlefield, running several times to ensure stable
+    behaviour and consistent completion times:
+  </p>
+
+  <table class="data-table">
+    <tr><th>Thief Alien Craft</th><th>First Attempt</th><th>Second Attempt</th><th>Third Attempt</th></tr>
+    <tr><td>Completion Time</td><td>29.55 sec</td><td>30.1 sec</td><td>29.2 sec</td></tr>
+  </table>
+  <div class="caption">Table 4.1: Test case result for Thief alien crafts</div>
+
+  <p>
+    Once the Thief was stable, the Fighter was tested. The alien crafts now head directly toward the player
+    before going for cargo, resulting in longer average completion times:
+  </p>
+
+  <table class="data-table">
+    <tr><th>Fighter Alien Craft</th><th>First Attempt</th><th>Second Attempt</th><th>Third Attempt</th></tr>
+    <tr><td>Completion Time</td><td>42.29 sec</td><td>40.37 sec</td><td>43.26 sec</td></tr>
+  </table>
+  <div class="caption">Table 4.2: Test case result for Fighter alien crafts</div>
+
+  <p>
+    An additional Fighter test navigated the player's craft around the battlefield to lure the alien crafts,
+    ensuring they follow the player correctly and only proceed to cargo after shooting the player down.
+  </p>
+  <p>
+    Finally, both types together were tested as a real game:
+  </p>
+
+  <table class="data-table">
+    <tr><th>Both Alien Crafts</th><th>First Attempt</th><th>Second Attempt</th><th>Third Attempt</th></tr>
+    <tr><td>Completion Time</td><td>43.57 sec</td><td>35.56 sec</td><td>37.94 sec</td></tr>
+  </table>
+  <div class="caption">Table 4.3: Test case result for both Thief and Fighter alien crafts</div>
+
+  <p>
+    Completion time begins to vary due to the three possible generation cases: all Thieves, all Fighters, or a
+    mix — adding uncertainty to the game.
+  </p>
+
+  <h3>4.2 Implementation and Testing for Flocking Controller</h3>
+  <p>
+    Implementation of the flocking controller is significantly more complex than the individual controller.
+    The <code>seekPos</code> function combines all three boid rules for followers, while the leader uses a
+    direct pilot call:
+  </p>
+
+<pre><span class="kw">void</span> <span class="ty">EweFlockingAiController</span>::<span class="fn">seekPos</span>(<span class="ty">float</span> tx, <span class="ty">float</span> ty) {
+    <span class="kw">if</span> (m_isLeader) {
+        m_ship-&gt;<span class="fn">Pilot</span>(<span class="num">1.0f</span>, <span class="fn">GetVectorAngle</span>(m_ship-&gt;x, m_ship-&gt;y, tx, ty));
+    } <span class="kw">else</span> {
+        <span class="ty">Vector2</span> sep = <span class="fn">separation</span>();
+
+        <span class="cm">// Cohesion offset + separation spread</span>
+        <span class="ty">float</span> cx = tx + sep.x * <span class="num">55.0f</span>;
+        <span class="ty">float</span> cy = ty + sep.y * <span class="num">55.0f</span>;
+
+        <span class="ty">float</span> angle = <span class="fn">GetVectorAngle</span>(m_ship-&gt;x, m_ship-&gt;y, cx, cy);
+
+        <span class="cm">// Alignment: nudge heading toward leader's rotation</span>
+        <span class="ty">float</span> delta = <span class="fn">alignment</span>() - angle;
+        <span class="kw">while</span> (delta &gt;  PI) delta -= TWO_PI;
+        <span class="kw">while</span> (delta &lt; -PI) delta += TWO_PI;
+        angle += delta * <span class="num">0.18f</span>;
+
+        m_ship-&gt;<span class="fn">Pilot</span>(<span class="num">1.0f</span>, angle);
+    }
+}</pre>
+
+  <p>
+    The flocking behaviour was tested with increasingly large groups to identify separation force issues. With
+    a large group, an incorrectly calculated separation force caused crafts to spin in place, unable to move
+    out of the force field:
+  </p>
+
+  <table class="data-table">
+    <tr>
+      <th>Craft Count</th>
+      <td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td>
+    </tr>
+    <tr>
+      <th>Behaviour</th>
+      <td>G</td><td>G</td><td>G</td><td>M</td><td>M</td><td>M</td><td>B</td><td>B</td>
+    </tr>
+  </table>
+  <div class="caption">Table 4.4: Flocking behaviour quality — G: good, M: moderate, B: bad</div>
+
+  <p>
+    To resolve this, separation was excluded from the leader (the leader always leads; followers avoid the
+    leader). A non-linear calculation method for separation among followers was then tested to produce better
+    behaviour in large groups. The leader election and re-election on leader death was implemented as follows:
+  </p>
+
+<pre><span class="kw">void</span> <span class="ty">EweFlockingAiController</span>::<span class="fn">promoteToLeader</span>() {
+    m_isLeader    = <span class="kw">true</span>;
+    m_stateFunction = &amp;<span class="ty">EweFlockingAiController</span>::<span class="fn">stateNavigate</span>;
+    g_world-&gt;m_flockLeader = m_ship;
+}
+
+<span class="cm">// Called from World::UpdateEntities when the current leader dies</span>
+<span class="kw">void</span> <span class="ty">World</span>::<span class="fn">electNewLeader</span>() {
+    <span class="kw">for</span> (<span class="ty">EweFlockingAiController</span>* ctrl : m_flockControllers) {
+        <span class="kw">if</span> (ctrl-&gt;m_ship-&gt;<span class="fn">isAlive</span>() &amp;&amp; !ctrl-&gt;<span class="fn">isLeader</span>()) {
+            ctrl-&gt;<span class="fn">promoteToLeader</span>();
+            <span class="kw">return</span>;
+        }
+    }
+}</pre>
+
+  <!-- ─ 5 ─────────────────────────────────────────────────────────────── -->
+  <h2>5. Analysis of Results</h2>
+  <p>
+    With the chosen test cases, Rip-Off was run several times to observe AI behaviour and identify improvements.
+    Based on the results, most incorrect behaviours were fixed and enhancements were made to improve the gaming
+    experience.
+  </p>
+
+  <h3>5.1 Analysis for AI Controller</h3>
+  <p>
+    The individual AI controller produces realistic behaviours and is able to play a reasonable game with the
+    player. As the game advances and more alien crafts are spawned, the challenge increases. The uncertainty
+    of which type spawns adds interesting variation, and the combination of Thief and Fighter makes the player
+    think before taking the next action.
+  </p>
+  <p>
+    One weakness is the lack of variety among alien craft types — players may grow bored with only three
+    possible combinations. To enhance the experience, a third type was added:
+  </p>
+  <ul>
+    <li><strong>Aggressive</strong> — focuses exclusively on eliminating the player's craft. It never steals
+      cargo, acting as a support role that provides time for Thieves to retrieve cargo by keeping the player
+      occupied.</li>
+  </ul>
+  <p>
+    However, the Aggressive type introduces a problem: if an entire wave spawns as Aggressive, no craft
+    retrieves cargo. Because the game engine requires all crafts in a wave to either be shot down or retreat
+    with cargo before the next wave spawns, an all-Aggressive wave could cause the game to stall in an
+    endless cycle.
+  </p>
+  <p>
+    Future improvements could include: backstab behaviours, lure-and-disengage tactics, or multi-stage escort
+    formations.
+  </p>
+
+  <h3>5.2 Analysis for Flocking Controller</h3>
+  <p>
+    The flocking AI controller takes longer to complete a game than the individual controller with the same
+    number of crafts, because only the followers retrieve cargo (not the leader). Completion times remain
+    stable on average:
+  </p>
+
+  <table class="data-table">
+    <tr><th>Flocking Thief</th><th>First Attempt</th><th>Second Attempt</th><th>Third Attempt</th></tr>
+    <tr><td>Completion Time</td><td>61.17 sec</td><td>52.38 sec</td><td>61.90 sec</td></tr>
+  </table>
+  <div class="caption">Table 5.1: Test case result for Flocking Thief alien crafts</div>
+
+  <table class="data-table">
+    <tr><th>Flocking Fighter</th><th>First Attempt</th><th>Second Attempt</th><th>Third Attempt</th></tr>
+    <tr><td>Completion Time</td><td>95.77 sec</td><td>97.97 sec</td><td>101.3 sec</td></tr>
+  </table>
+  <div class="caption">Table 5.2: Test case result for Flocking Fighter alien crafts</div>
+
+  <p>
+    Longer times are also caused by the separation force pushing crafts apart, causing some to take wider arcs
+    to reach the cargo. The main known weaknesses are:
+  </p>
+  <ul>
+    <li>Crafts can become stuck in an endless separation loop, preventing forward movement in large groups.</li>
+    <li>The leader does not wait for all followers to collect cargo before retreating.</li>
+    <li>The flock is predictable — all followers perform the same leader-issued command simultaneously.</li>
+  </ul>
+  <p>
+    Potential improvements include: a <em>surround</em> command that instructs followers to form a circle
+    around the player and fire; issuing different commands to different followers (one retrieves cargo, another
+    attacks the player); more varied formation patterns.
+  </p>
+  <p>
+    In general, the individual AI controller is more suitable for new players as each craft acts independently.
+    The flocking controller is more suitable for experienced players who can handle coordinated group tactics.
+    Among all controllers implemented, the individual AI controller is considered the best for the game overall,
+    as it is more complete and brings more uncertainty to the game.
+  </p>
+
+  <!-- ─ 6 ─────────────────────────────────────────────────────────────── -->
+  <h2>6. Conclusion</h2>
+  <p>
+    The ACW provided the opportunity to design and implement game AI for a game developed in another module.
+    With the code base set up for the Rip-Off game, it was possible to fully concentrate on the AI code. Lots
+    of knowledge and concepts of designing and implementing game AI were learned throughout the module.
+  </p>
+  <p>
+    The flocking algorithm was implemented to demonstrate the three basic boid behaviours. However, minor flaws
+    remain — particularly in large groups — that were not resolved within the available time.
+  </p>
+  <p>
+    Overall the ACW produced satisfying results. The individual AI controller is stable and complete; the
+    flocking controller works well with small groups and has clear paths for future enhancement.
+  </p>
+
+</article>
+
+<!-- ── Live game viewport ─────────────────────────────────────────────────── -->
+<section class="game-section">
+  <div class="game-section-title">Live Demo</div>
+  <p class="game-hint">Click the viewport to focus &nbsp;·&nbsp; Up to accelerate &nbsp;·&nbsp; Left / Right to steer &nbsp;·&nbsp; Space to shoot &nbsp;·&nbsp; Enter to start</p>
+  <div id="game-wrap">
+    <canvas id="CanvasPrototype"></canvas>
+    <span class="game-overlay-label">flocking / ripoff_compact.js</span>
+  </div>
+</section>
+
+<script src="ripoff_compact.js"></script>
+<script>
+  var _Shell = Shell;
+  Shell = function () {
+    _Shell.call(this);
+    this.Resize = function () {
+      var wrap = document.getElementById('game-wrap');
+      var w = wrap.clientWidth, h = wrap.clientHeight;
+      g_canvas.width  = w;
+      g_canvas.height = h;
+      DimClient.x = w; DimClient.y = h;
+      DimView.bottom = h; DimView.right = w;
+      DimViewCentral.x = w / 2; DimViewCentral.y = h / 2;
+    };
+  };
+  Shell.prototype = _Shell.prototype;
+
+  Start();
+</script>
+<script>window.addEventListener('load', function () { window.scrollTo(0, 0); });</script>
+
+</body>
+</html>

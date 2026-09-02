@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shooter Tutorial — Physics Playground</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #06080f;
+      color: #cde;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(60, 120, 200, .06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(60, 120, 200, .06) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 40px 24px 24px;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 0 30px rgba(80, 160, 255, .5);
+    }
+
+    header p {
+      margin-top: 8px;
+      font-size: .9rem;
+      color: #89a;
+    }
+
+    #back {
+      position: fixed;
+      top: 12px;
+      left: 14px;
+      color: #adf;
+      font: 11px/1 monospace;
+      text-decoration: none;
+      opacity: 0.7;
+      transition: opacity .2s;
+      z-index: 10;
+    }
+
+    #back:hover {
+      opacity: 1;
+    }
+
+    main {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px 60px;
+    }
+
+    .section-title {
+      font-size: .7rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #556;
+      margin: 32px 0 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(80, 140, 220, .12);
+    }
+
+    .demos {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .demo-card {
+      background: rgba(12, 18, 35, 0.75);
+      border: 1px solid rgba(80, 140, 220, .15);
+      border-radius: 10px;
+      overflow: hidden;
+      backdrop-filter: blur(4px);
+    }
+
+    .demo-label {
+      display: block;
+      font-size: .72rem;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: #7af;
+      padding: 8px 12px 6px;
+      text-decoration: none;
+      transition: color .15s;
+    }
+
+    a.demo-label:hover {
+      color: #fff;
+    }
+
+    .demo-card canvas {
+      display: block;
+      width: 100%;
+      height: 220px;
+      background: #000;
+      cursor: crosshair;
+    }
+
+    .demo-card canvas:focus {
+      outline: 1px solid rgba(80, 160, 255, .4);
+    }
+
+    .controls {
+      padding: 6px 12px 10px;
+      font-size: .68rem;
+      color: #445;
+    }
+
+    a.ripoff-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      background: rgba(12, 18, 35, 0.75);
+      border: 1px solid rgba(200, 80, 200, .18);
+      border-radius: 10px;
+      backdrop-filter: blur(4px);
+      text-decoration: none;
+      color: inherit;
+      transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+
+    a.ripoff-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(200, 80, 200, .5);
+      box-shadow: 0 8px 28px rgba(160, 40, 160, .18);
+    }
+
+    .ripoff-icon {
+      font-size: 2rem;
+    }
+
+    .ripoff-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .ripoff-title {
+      font-size: .85rem;
+      font-weight: 600;
+      color: #e8f0ff;
+    }
+
+    .ripoff-desc {
+      font-size: .75rem;
+      color: #556;
+    }
+  </style>
+</head>
+
+<body>
+
+  <a id="back" href="../../">← back</a>
+
+  <header>
+    <h1>Shooter Tutorial</h1>
+    <p>Incremental game mechanics demos</p>
+  </header>
+
+  <main>
+
+    <div class="section-title">Ship Movement</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=ShipMovementI">I — Basic Movement</a>
+        <canvas tabindex="0" id="cvsShipMovementI" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=ShipMovementII">II — Bounded Movement</a>
+        <canvas tabindex="0" id="cvsShipMovementII" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=ShipMovementIII">III — Roll Animation</a>
+        <canvas tabindex="0" id="cvsShipMovementIII" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=ShipMovementIV">IV — Speed Control</a>
+        <canvas tabindex="0" id="cvsShipMovementIV" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move</div>
+      </div>
+
+    </div>
+
+    <div class="section-title">Shooting</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Bullets">Bullets</a>
+        <canvas tabindex="0" id="cvsBullets" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move &nbsp;·&nbsp; Space to shoot</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=BasicShootI">Basic Shoot I</a>
+        <canvas tabindex="0" id="cvsBasicShootI" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move &nbsp;·&nbsp; Space to shoot</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=BasicShoot_SpinOff">Basic Shoot — Spin Off</a>
+        <canvas tabindex="0" id="cvsBasicShootSpinOff" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move &nbsp;·&nbsp; Space to shoot</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=AutoFireShoot">Auto Fire</a>
+        <canvas tabindex="0" id="cvsAutoFireShoot" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=DualShoot">Dual Shoot</a>
+        <canvas tabindex="0" id="cvsDualShoot" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move &nbsp;·&nbsp; Space to shoot</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=FanShoot">Fan Shoot</a>
+        <canvas tabindex="0" id="cvsFanShoot" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move &nbsp;·&nbsp; Space to shoot</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=RoundShoot">Round Shoot</a>
+        <canvas tabindex="0" id="cvsRoundShoot" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move &nbsp;·&nbsp; Space to shoot</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=ChargedShoot">Charged Shoot</a>
+        <canvas tabindex="0" id="cvsChargedShoot" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move &nbsp;·&nbsp; Space to charge &amp; release</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=ChargedShootII">Charged Shoot II</a>
+        <canvas tabindex="0" id="cvsChargedShootII" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move &nbsp;·&nbsp; Space to charge &amp; release</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=CombineShoot">Combine Shoot</a>
+        <canvas tabindex="0" id="cvsCombineShoot" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move &nbsp;·&nbsp; Space to shoot</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=SplitBulletShoot">Split Bullet</a>
+        <canvas tabindex="0" id="cvsSplitBulletShoot" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move &nbsp;·&nbsp; Space to shoot</div>
+      </div>
+
+    </div>
+
+    <div class="section-title">Turret &amp; Scrolling</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=DirectionalShoot">Directional Shoot (Turret)</a>
+        <canvas tabindex="0" id="cvsDirectionalShoot" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to dodge</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=TurretShoot">Turret Shoot</a>
+        <canvas tabindex="0" id="cvsTurretShoot" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to dodge</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Scroll">Scroll</a>
+        <canvas tabindex="0" id="cvsScroll" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=Wrap">Wrap</a>
+        <canvas tabindex="0" id="cvsWrap" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to move</div>
+      </div>
+
+    </div>
+
+    <div class="section-title">Asteroid Strike</div>
+    <div class="demos">
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=AsteroidStrikeI">Asteroid Strike I</a>
+        <canvas tabindex="0" id="cvsAsteroidStrikeI" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to dodge</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=AsteroidStrikeII">Asteroid Strike II</a>
+        <canvas tabindex="0" id="cvsAsteroidStrikeII" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to dodge &nbsp;·&nbsp; Space to shoot</div>
+      </div>
+
+      <div class="demo-card">
+        <a class="demo-label" href="demo.html?s=AsteroidStrikeIII">Asteroid Strike III</a>
+        <canvas tabindex="0" id="cvsAsteroidStrikeIII" width="320" height="220"></canvas>
+        <div class="controls">Arrow / WASD to dodge &nbsp;·&nbsp; Space to shoot</div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script src="js/common.js"></script>
+  <script src="js/ShipMovementI.js"></script>
+  <script src="js/ShipMovementII.js"></script>
+  <script src="js/ShipMovementIII.js"></script>
+  <script src="js/ShipMovementIV.js"></script>
+  <script src="js/Bullets.js"></script>
+  <script src="js/BasicShootI.js"></script>
+  <script src="js/BasicShoot_SpinOff.js"></script>
+  <script src="js/AutoFireShoot.js"></script>
+  <script src="js/DualShoot.js"></script>
+  <script src="js/FanShoot.js"></script>
+  <script src="js/RoundShoot.js"></script>
+  <script src="js/ChargedShoot.js"></script>
+  <script src="js/ChargedShootII.js"></script>
+  <script src="js/CombineShoot.js"></script>
+  <script src="js/SplitBulletShoot.js"></script>
+  <script src="js/DirectionalShoot.js"></script>
+  <script src="js/TurretShoot.js"></script>
+  <script src="js/Scroll.js"></script>
+  <script src="js/Wrap.js"></script>
+  <script src="js/AsteroidStrikeI.js"></script>
+  <script src="js/AsteroidStrikeII.js"></script>
+  <script src="js/AsteroidStrikeIII.js"></script>
+
+</body>
+
+</html>

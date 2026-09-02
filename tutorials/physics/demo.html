@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sora — Demo</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #cde;
+    }
+
+    #bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 16px;
+      background: rgba(6, 8, 15, 0.92);
+      border-bottom: 1px solid rgba(80,140,220,.12);
+      flex-shrink: 0;
+    }
+
+    #back {
+      color: #adf;
+      font: 11px/1 monospace;
+      text-decoration: none;
+      opacity: 0.7;
+      transition: opacity .2s;
+      white-space: nowrap;
+    }
+    #back:hover { opacity: 1; }
+
+    #demo-title {
+      font-size: .75rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #7af;
+      flex: 1;
+    }
+
+    #controls-hint {
+      font-size: 1rem;
+      color: #89a;
+      white-space: nowrap;
+    }
+
+    #game-wrap {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      flex: 1;
+      min-width: 0;
+      cursor: crosshair;
+    }
+    canvas:focus { outline: none; }
+
+    #side-panel {
+      display: none;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+<div id="bar">
+  <a id="back" href="index.html">← back</a>
+  <span id="demo-title"></span>
+  <span id="controls-hint"></span>
+</div>
+
+<div id="game-wrap">
+  <div id="side-panel"></div>
+</div>
+
+<script>
+const DEMOS = {
+  Motion:   { canvas: 'cvsMotion',   title: 'Motion — Locomotion',         controls: '↑ Thrust · ← → Rotate · ↓ Brake' },
+  Sensing:  { canvas: 'cvsSensing',  title: 'Sensing — Rotation & Fields', controls: 'Click/Move to aim · Q Rotate mode · E Sensory mode' },
+  Reaction: { canvas: 'cvsReaction', title: 'Reaction — AI Behaviour',     controls: '↑ Thrust · ← → Rotate · ↓ Brake · Q AI mode · E Sensory' },
+  Scroll:   { canvas: 'cvsScroll',   title: 'Scroll — Parallax Background',controls: 'Arrow / WASD to move' },
+  FSM:      { canvas: 'cvsFSM',      title: 'FSM — RPG State Machine',     controls: 'Configure settings · Next Turn / Simulate All' },
+};
+
+const params = new URLSearchParams(location.search);
+const key    = params.get('s');
+const demo   = DEMOS[key];
+
+if (!demo) {
+  document.body.innerHTML = '<p style="padding:32px;color:#f88">Unknown demo: ' + key + '</p>';
+} else {
+  document.title = 'Sora — ' + demo.title;
+  document.getElementById('demo-title').textContent    = demo.title;
+  document.getElementById('controls-hint').textContent = demo.controls;
+
+  const wrap   = document.getElementById('game-wrap');
+  const canvas = document.createElement('canvas');
+  canvas.id = demo.canvas;
+  canvas.tabIndex = 0;
+
+  // Insert canvas before the side-panel
+  wrap.insertBefore(canvas, document.getElementById('side-panel'));
+
+  function resizeCanvas() {
+    const panel = document.getElementById('side-panel');
+    const panelW = (panel && panel.style.display !== 'none') ? panel.offsetWidth : 0;
+    canvas.width  = wrap.clientWidth - panelW;
+    canvas.height = wrap.clientHeight;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  function loadScript(src, cb) {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = cb;
+    s.onerror = () => console.error('Failed to load', src);
+    document.head.appendChild(s);
+  }
+
+  loadScript('js/common.js', () => {
+    loadScript('js/' + key + '.js', () => {
+      // After FSM.js runs it populates the side-panel; resize canvas to compensate
+      resizeCanvas();
+      canvas.focus();
+    });
+  });
+}
+</script>
+
+</body>
+</html>

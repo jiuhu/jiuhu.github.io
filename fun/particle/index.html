@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Particle Simulation</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #06080f; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      width: 100vw; height: 100vh;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(60,120,200,.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(60,120,200,.05) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    canvas { display: block; }
+
+    #back {
+      position: fixed; top: 12px; left: 14px;
+      color: #adf; font: 11px/1 monospace;
+      text-decoration: none; opacity: 0.6;
+      transition: opacity .2s; z-index: 10;
+    }
+    #back:hover { opacity: 1; }
+
+    #ui {
+      position: fixed;
+      top: 30px; left: 14px;
+      font: 12px/1.75 monospace;
+      color: #556;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      user-select: none;
+      z-index: 10;
+    }
+
+    #stats span { color: #aab; }
+
+    .legend { display: flex; align-items: center; gap: 7px; }
+    .dot { width: 8px; height: 8px; border-radius: 1px; flex-shrink: 0; }
+
+    #controls { display: flex; gap: 6px; margin-top: 2px; }
+    button {
+      background: rgba(12,18,35,.85);
+      border: 1px solid rgba(80,140,220,.2);
+      color: #7af;
+      padding: 4px 12px;
+      cursor: pointer;
+      font: 12px monospace;
+      border-radius: 3px;
+      transition: border-color .15s, background .15s;
+    }
+    button:hover { background: rgba(20,30,55,.9); border-color: rgba(80,180,255,.5); color: #adf; }
+    button:active { background: rgba(30,44,75,.9); }
+  </style>
+</head>
+<body>
+
+<a id="back" href="../../">← back</a>
+
+<canvas id="canvas"></canvas>
+
+<div id="ui">
+  <div id="stats">
+    <div>shapes:&nbsp;<span id="count">0</span></div>
+    <div>fps:&nbsp;&nbsp;&nbsp;<span id="fps">–</span></div>
+  </div>
+
+  <div>
+    <div class="legend">
+      <div class="dot" style="background:#00ffff"></div>
+      triangle &rarr; rect
+    </div>
+    <div class="legend">
+      <div class="dot" style="background:#ff3333"></div>
+      rect &rarr; hex
+    </div>
+    <div class="legend">
+      <div class="dot" style="background:#ff00ff"></div>
+      hex &rarr; oct
+    </div>
+    <div class="legend">
+      <div class="dot" style="background:#ffff00"></div>
+      oct &rarr; triangle
+    </div>
+  </div>
+
+  <div id="controls">
+    <button id="btn-spawn">+200</button>
+    <button id="btn-remove">−200</button>
+    <button id="btn-pause">pause</button>
+    <button id="btn-clear">clear</button>
+  </div>
+</div>
+
+<script src="js/simulation.js"></script>
+</body>
+</html>

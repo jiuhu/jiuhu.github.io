@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sora — Demo</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #cde;
+    }
+
+    #bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 16px;
+      background: rgba(6, 8, 15, 0.92);
+      border-bottom: 1px solid rgba(80,140,220,.12);
+      flex-shrink: 0;
+    }
+
+    #back {
+      color: #adf;
+      font: 11px/1 monospace;
+      text-decoration: none;
+      opacity: 0.7;
+      transition: opacity .2s;
+      white-space: nowrap;
+    }
+    #back:hover { opacity: 1; }
+
+    #demo-title {
+      font-size: .75rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #7af;
+      flex: 1;
+    }
+
+    #controls-hint {
+      font-size: 1rem;
+      color: #89a;
+      white-space: nowrap;
+    }
+
+    #game-wrap {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    canvas:focus { outline: none; }
+  </style>
+</head>
+<body>
+
+<div id="bar">
+  <a id="back" href="index.html">← back</a>
+  <span id="demo-title"></span>
+  <span id="controls-hint"></span>
+</div>
+
+<div id="game-wrap"></div>
+
+<script>
+const DEMOS = {
+  ShipMovementI:     { canvas: 'cvsShipMovementI',     title: 'I — Basic Movement',            controls: 'Arrow / WASD to move' },
+  ShipMovementII:    { canvas: 'cvsShipMovementII',    title: 'II — Bounded Movement',          controls: 'Arrow / WASD to move' },
+  ShipMovementIII:   { canvas: 'cvsShipMovementIII',   title: 'III — Roll Animation',           controls: 'Arrow / WASD to move' },
+  ShipMovementIV:    { canvas: 'cvsShipMovementIV',    title: 'IV — Speed Control',             controls: 'Arrow / WASD to move' },
+  Bullets:           { canvas: 'cvsBullets',           title: 'Bullets',                        controls: 'Arrow / WASD to move · Space to shoot' },
+  BasicShootI:       { canvas: 'cvsBasicShootI',       title: 'Basic Shoot I',                  controls: 'Arrow / WASD to move · Space to shoot' },
+  BasicShoot_SpinOff:{ canvas: 'cvsBasicShootSpinOff', title: 'Basic Shoot — Spin Off',         controls: 'Arrow / WASD to move · Space to shoot' },
+  AutoFireShoot:     { canvas: 'cvsAutoFireShoot',     title: 'Auto Fire',                      controls: 'Arrow / WASD to move' },
+  DualShoot:         { canvas: 'cvsDualShoot',         title: 'Dual Shoot',                     controls: 'Arrow / WASD to move · Space to shoot' },
+  FanShoot:          { canvas: 'cvsFanShoot',          title: 'Fan Shoot',                      controls: 'Arrow / WASD to move · Space to shoot' },
+  RoundShoot:        { canvas: 'cvsRoundShoot',        title: 'Round Shoot',                    controls: 'Arrow / WASD to move · Space to shoot' },
+  ChargedShoot:      { canvas: 'cvsChargedShoot',      title: 'Charged Shoot',                  controls: 'Arrow / WASD to move · Space to charge & release' },
+  ChargedShootII:    { canvas: 'cvsChargedShootII',    title: 'Charged Shoot II',               controls: 'Arrow / WASD to move · Space to charge & release' },
+  CombineShoot:      { canvas: 'cvsCombineShoot',      title: 'Combine Shoot',                  controls: 'Arrow / WASD to move · Space to shoot' },
+  SplitBulletShoot:  { canvas: 'cvsSplitBulletShoot',  title: 'Split Bullet',                   controls: 'Arrow / WASD to move · Space to shoot' },
+  DirectionalShoot:  { canvas: 'cvsDirectionalShoot',  title: 'Directional Shoot (Turret)',     controls: 'Arrow / WASD to dodge' },
+  TurretShoot:       { canvas: 'cvsTurretShoot',       title: 'Turret Shoot',                   controls: 'Arrow / WASD to dodge' },
+  Scroll:            { canvas: 'cvsScroll',            title: 'Scroll',                         controls: 'Arrow / WASD to move' },
+  Wrap:              { canvas: 'cvsWrap',              title: 'Wrap',                           controls: 'Arrow / WASD to move' },
+  AsteroidStrikeI:   { canvas: 'cvsAsteroidStrikeI',   title: 'Asteroid Strike I',              controls: 'Arrow / WASD to dodge' },
+  AsteroidStrikeII:  { canvas: 'cvsAsteroidStrikeII',  title: 'Asteroid Strike II',             controls: 'Arrow / WASD to dodge · Space to shoot' },
+  AsteroidStrikeIII: { canvas: 'cvsAsteroidStrikeIII', title: 'Asteroid Strike III',            controls: 'Arrow / WASD to dodge · Space to shoot' },
+};
+
+const params = new URLSearchParams(location.search);
+const key = params.get('s');
+const demo = DEMOS[key];
+
+if (!demo) {
+  document.body.innerHTML = '<p style="padding:32px;color:#f88">Unknown demo: ' + key + '</p>';
+} else {
+  document.title = 'Sora — ' + demo.title;
+  document.getElementById('demo-title').textContent = demo.title;
+  document.getElementById('controls-hint').textContent = demo.controls;
+
+  const wrap = document.getElementById('game-wrap');
+  const canvas = document.createElement('canvas');
+  canvas.id = demo.canvas;
+  canvas.tabIndex = 0;
+  wrap.appendChild(canvas);
+
+  // Resize canvas to match its CSS size
+  function resizeCanvas() {
+    canvas.width  = wrap.clientWidth;
+    canvas.height = wrap.clientHeight;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  const bust = '?v=' + Date.now();
+
+  function loadScript(src, cb) {
+    const s = document.createElement('script');
+    s.src = src + bust;
+    s.onload = cb;
+    s.onerror = () => console.error('Failed to load', src);
+    document.head.appendChild(s);
+  }
+
+  loadScript('js/common.js', () => {
+    // Scale speed globals to match full-viewport canvas vs the 320px tutorial cards
+    const scale = canvas.width / 320;
+    g_shipSpeed    = Math.round(g_shipSpeed    * scale);
+    g_bulletSpeed  = Math.round(g_bulletSpeed  * scale);
+    g_asteroidSpeed = Math.round(g_asteroidSpeed * scale);
+    g_scrollSpeed  = Math.round(g_scrollSpeed  * scale);
+    loadScript('js/' + key + '.js', () => {
+      canvas.focus();
+    });
+  });
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tactics Game — MSc Games Programming</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0e1a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: sans-serif;
+    }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+      border: 2px solid #2d4a7a;
+      cursor: default;
+    }
+    #back {
+      position: fixed; top: 12px; left: 14px;
+      color: #adf; font: 11px/1 monospace;
+      text-decoration: none; opacity: 0.6;
+      transition: opacity .2s; z-index: 10;
+    }
+    #back:hover { opacity: 1; }
+    #info {
+      color: #555;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <a id="back" href="../../">← back</a>
+  <canvas id="game"></canvas>
+  <div id="info">
+    Port of C++/DirectX9 MSc dissertation project &mdash; University of Hull, 2010 |
+    Single Player vs AI and Hot Seat available
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
